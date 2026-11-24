@@ -155,6 +155,11 @@ func TestClickImageOpensViewer(t *testing.T) {
 	if !a.viewer.open {
 		t.Error("a click on the picture did not open it")
 	}
+	tester.Key(0, ui.KeyEscape)
+	tester.Frame()
+	if a.viewer.open {
+		t.Error("Esc did not close the picture")
+	}
 }
 
 // TestDeleteImageFromViewer opens a picture full size and deletes it: its

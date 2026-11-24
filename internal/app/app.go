@@ -100,6 +100,8 @@ type App struct {
 	viewer viewer
 	// imageOf finds a picture by its block where no session holds it: tests.
 	imageOf func(id string) ui.ImageSource
+	// settings is the settings dialog.
+	settings settingsView
 	// themeOpen shows the theme picker.
 	themeOpen bool
 	sideList  ui.ListState

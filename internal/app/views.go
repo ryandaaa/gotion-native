@@ -89,6 +89,9 @@ func (a *App) View(c *ui.Context) {
 	if a.viewer.open {
 		a.viewerView(c)
 	}
+	if a.settings.open {
+		a.settingsDialog(c)
+	}
 }
 
 // shortcuts are the window's keys.
@@ -119,6 +122,8 @@ func (a *App) shortcuts(c *ui.Context) {
 		a.cycleTheme()
 	case c.Shortcut(ui.Cmd, ui.KeyR):
 		a.refresh()
+	case c.Shortcut(ui.Cmd, ui.KeyComma):
+		a.openSettings("")
 	case c.Shortcut(ui.Cmd, ui.KeyEqual), c.Shortcut(ui.Cmd|ui.Shift, ui.KeyEqual):
 		a.zoom(+1)
 	case c.Shortcut(ui.Cmd, ui.KeyMinus):
@@ -360,8 +365,8 @@ func (a *App) sidebar(c *ui.Context) {
 			}
 		}).Grow(1).Label("Halaman")
 		ui.Row(c).AlignItems(ui.Center).Gap(2).Padding(6, 4, 0, 4).Children(func() {
-			if iconButton(c, p, iconLogout, "Keluar (hapus token)") {
-				a.signOut()
+			if iconButton(c, p, iconSettings, "Pengaturan (Ctrl+,)") {
+				a.openSettings("")
 			}
 			ui.Box(c).Grow(1)
 			if a.bot != nil && a.bot.Bot != nil {
@@ -1006,51 +1011,12 @@ func (a *App) themeButton(c *ui.Context) {
 	}
 	ui.Popover(c, b, &a.themeOpen, func() {
 		ui.Column(c).Width(268).Padding(6).Gap(14).Children(func() {
-			ui.Column(c).Gap(8).Children(func() {
-				ui.Text(c, "Mode").FontSize(12).FontWeight(600).TextColor(p.Faint)
-				ui.Row(c).Gap(2).Padding(2).Radius(8).Background(p.Sidebar).Children(func() {
-					for _, m := range []struct{ id, label string }{{"system", "Sistem"}, {"light", "Terang"}, {"dark", "Gelap"}} {
-						o := ui.Text(c.Key("mode"+m.id), m.label).FontSize(13).Padding(5, 0).Grow(1).TextAlign(ui.Center).Radius(6).Cursor(ui.CursorPointer)
-						if a.set.Theme == m.id || a.set.Theme == "" && m.id == "system" {
-							o.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
-						} else {
-							o.TextColor(p.Muted)
-						}
-						if o.Clicked() {
-							a.set.Theme = m.id
-							a.saveSettings()
-						}
-					}
-				})
-			})
-			ui.Column(c).Gap(8).Children(func() {
-				ui.Text(c, "Warna latar").FontSize(12).FontWeight(600).TextColor(p.Faint)
-				ui.Row(c).Wrap().Gap(8).Children(func() {
-					for _, w := range washes {
-						cur := a.set.Wash == w.id || a.set.Wash == "" && w.plain()
-						if a.swatch(c, w, cur).Clicked() {
-							a.set.Wash = w.id
-							a.saveSettings()
-						}
-					}
-				})
-				ui.Text(c, washByID(a.set.Wash).label).FontSize(12).TextColor(p.Muted)
-			})
-			ui.Column(c).Gap(6).Children(func() {
-				on := a.set.Glass
-				label := "Kaca (blur) di sekitar kartu"
-				ok := glassSupported()
-				sw := ui.Checkbox(c, &on, label).Disabled(!ok)
-				if sw.Changed() && ok {
-					a.set.Glass = on
-					a.saveSettings()
-					a.applyGlass()
-				}
-				if !ok {
-					ui.Text(c, "Belum didukung di Linux: sistemnya tidak menyediakan efek kaca. Tersedia di macOS dan Windows 11.").
-						FontSize(11).TextColor(p.Faint)
-				}
-			})
+			a.appearance(c)
+			more := ui.Text(c.Key("more-settings"), "Pengaturan lainnya…").FontSize(12).TextColor(p.Muted).Cursor(ui.CursorPointer)
+			if more.Clicked() {
+				a.themeOpen = false
+				a.openSettings("tampilan")
+			}
 		})
 	})
 }

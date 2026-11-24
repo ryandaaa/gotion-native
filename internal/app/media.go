@@ -196,12 +196,11 @@ type viewer struct {
 
 func (a *App) viewerView(c *ui.Context) {
 	v := &a.viewer
-	if c.Shortcut(0, ui.KeyEscape) {
-		v.open = false
-		return
-	}
 	scrim := ui.Column(c.Key("viewer")).Absolute().Left(0).Top(0).Right(0).Bottom(0).ZIndex(60).
 		Background(ui.RGBA(0, 0, 0, 0.82)).Center().Padding(40).Modal().Cursor(ui.CursorPointer).Transition(fadeIn)
+	if scrim.OverlayShortcut(0, ui.KeyEscape) {
+		v.open = false
+	}
 	removed := false
 	scrim.Children(func() {
 		ui.Image(c, v.img).Fit(ui.Contain).Grow(1).MinHeight(0).FillWidth().Radius(6).Transition(popIn)
