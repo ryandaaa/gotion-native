@@ -119,7 +119,6 @@ var en = map[string]string{
 	// Sidebar, title bar, shortcuts
 	"Cari halaman…":                        "Search pages…",
 	"Kembali (Ctrl+[)":                     "Back (Ctrl+[)",
-	"Maju (Ctrl+])":                        "Forward (Ctrl+])",
 	"Kembali ke 100% (Ctrl+0)":             "Back to 100% (Ctrl+0)",
 	"Muat ulang (Ctrl+R)":                  "Reload (Ctrl+R)",
 	"Sidebar (Ctrl+\\)":                    "Sidebar (Ctrl+\\)",
@@ -371,6 +370,8 @@ var en = map[string]string{
 	"Memuat halaman dari Notion…":                                            "Loading pages from Notion…",
 	"Belum ada halaman yang dibagikan ke gotion":                             "No pages are shared with gotion yet",
 	"Pilih halaman di Notion, dan semua sub-halamannya ikut muncul di sini.": "Choose pages in Notion, and they show here with all their subpages.",
+	"Halaman baru di Notion belum muncul?":                                   "A new page in Notion isn't here?",
+	"Di Notion: ••• → Connections, lalu tambahkan integrasimu.":              "In Notion: ••• → Connections, then add your integration.",
 	"Pilih halaman di Notion":                                                "Choose pages in Notion",
 	"Muat ulang":                                                             "Reload",
 	"Pilih halaman lain":                                                     "Choose more pages",

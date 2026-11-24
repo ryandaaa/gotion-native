@@ -80,7 +80,6 @@ var (
 	iconDown        = icon(`<path d="M6 9l6 6 6-6"/>`)
 	iconSidebar     = icon(`<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>`)
 	iconBack        = icon(`<path d="M15 18l-6-6 6-6"/>`)
-	iconForward     = icon(`<path d="M9 18l6-6-6-6"/>`)
 	iconPlus        = icon(`<path d="M12 5v14M5 12h14"/>`)
 	iconSplit       = icon(`<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>`)
 	iconClose       = icon(`<path d="M6 6l12 12M18 6L6 18"/>`)

@@ -114,6 +114,8 @@ func TestFirstRunJourney(t *testing.T) {
 	click("Pilih halaman di Notion")
 	see("Catatan Pertama")
 	see("Pilih halaman di sidebar")
+	// The list ends with the way to share a page made at the top in Notion.
+	see("Halaman baru di Notion belum muncul?")
 	if logins != 2 {
 		t.Errorf("Notion's page passed %d times", logins)
 	}

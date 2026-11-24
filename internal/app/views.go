@@ -207,9 +207,7 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 		if navButton(c, p, iconBack, tr.T("Kembali (Ctrl+[)"), a.hpos > 0) {
 			a.back()
 		}
-		if navButton(c, p, iconForward, tr.T("Maju (Ctrl+])"), a.hpos < len(a.history)-1) {
-			a.forward()
-		}
+		// Forward has no button, as it is rarely used: Ctrl+] goes forward.
 		a.breadcrumbs(c)
 		ui.Box(c).Grow(1)
 		search := ui.Row(c.Key("search")).AlignItems(ui.Center).Gap(8).Padding(5, 12).Radius(8).Background(p.Hover).
@@ -328,6 +326,8 @@ func (a *App) sidebar(c *ui.Context) {
 					FontSize(12).TextColor(p.Faint).Padding(4, 10)
 			case "db":
 				a.sectionHeader(c, "Database", len(a.databases), "db")
+			case "hint":
+				a.sideHint(c)
 			default:
 				a.item(c, r.n, r.depth)
 			}
@@ -341,6 +341,31 @@ func (a *App) sidebar(c *ui.Context) {
 				ui.Text(c, a.bot.Bot.WorkspaceName).FontSize(12).TextColor(p.Faint).SingleLine().MaxWidth(180)
 			}
 		})
+	})
+}
+
+// sideHint closes the page list: a page made at the top of the workspace
+// in Notion is not shared with gotion until it is chosen there, which
+// people don't expect. It says so, and opens Notion's page to choose it.
+func (a *App) sideHint(c *ui.Context) {
+	p := a.pal()
+	ui.Column(c).Gap(2).Padding(16, 10, 8, 10).Children(func() {
+		ui.Text(c, tr.T("Halaman baru di Notion belum muncul?")).FontSize(12).TextColor(p.Faint)
+		switch {
+		case a.oauth != nil:
+			ui.Text(c, tr.T("Lanjutkan di browser: pilih halaman, lalu klik Allow.")).FontSize(12).TextColor(p.Muted)
+		case a.client != nil && a.client.Refresh != nil:
+			l := ui.Text(c.Key("hint-choose"), tr.T("Pilih halaman di Notion")).FontSize(12).FontWeight(500).TextColor(p.Muted).
+				Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(tr.T("Pilih halaman di Notion"))
+			if l.Hovered() {
+				l.TextColor(p.Text).Underline()
+			}
+			if l.Clicked() {
+				a.startOAuth()
+			}
+		default:
+			ui.Text(c, tr.T("Di Notion: ••• → Connections, lalu tambahkan integrasimu.")).FontSize(12).TextColor(p.Muted)
+		}
 	})
 }
 
@@ -359,7 +384,7 @@ func (a *App) sectionHeader(c *ui.Context, title string, count int, key string) 
 // sideRow is a row of the sidebar: a page, a group's or a section's
 // header, or a note.
 type sideRow struct {
-	kind  string // "item", "db", "error", "empty"
+	kind  string // "item", "db", "error", "empty", "hint"
 	n     *node
 	depth int
 	key   string
@@ -394,6 +419,9 @@ func (a *App) sideRows() []sideRow {
 				tree(n, 0)
 			}
 		}
+	}
+	if len(a.groups)+len(a.databases) > 0 {
+		rows = append(rows, sideRow{kind: "hint", key: "!hint"})
 	}
 	return rows
 }
@@ -744,9 +772,9 @@ func (a *App) pageBody(c *ui.Context, i int, pn *panel, n *node, width, pad floa
 			ui.Row(c).PaddingX(pad).Children(func() { emoji.View(c, n.Emoji, 52) })
 		}
 		ui.Row(c).PaddingX(pad).AlignItems(ui.Center).Gap(10).Children(func() {
-			// The title is larger than any heading in the text: 40 against
+			// The title is larger than any heading in the text: 34 against
 			// the first level's 30.
-			in := ui.TextInput(c.Key("title"+pn.id), &pn.title).Placeholder(tr.T("Tanpa judul")).FontSize(40).FontWeight(700).
+			in := ui.TextInput(c.Key("title"+pn.id), &pn.title).Placeholder(tr.T("Tanpa judul")).FontSize(34).FontWeight(700).
 				Grow(1).Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).Label(tr.T("Judul halaman"))
 			if in.Changed() {
 				pn.titleDirty, pn.titleEdit = true, time.Now()
