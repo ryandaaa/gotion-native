@@ -851,6 +851,7 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 			}
 		}
 		a.trackScroll(pn)
+		a.handles(c, pn, box, pad)
 		a.slashView(c, pn)
 		if e.Focused() && !pn.slash.open {
 			a.formatBar(c, pn)

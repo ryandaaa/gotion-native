@@ -572,3 +572,14 @@ func (s *Session) Image(id string) ui.ImageSource {
 	defer s.mu.Unlock()
 	return s.shape.Images[id]
 }
+
+// Movable reports whether the editor's paragraph id shows a block that can
+// be moved, duplicated or deleted from a block menu: one Notion lets go of
+// and makes again. Notion moves no blocks, so a move makes the block anew,
+// and with it would go a block's children, and a sub-page's whole page.
+func (s *Session) Movable(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := s.known[id]
+	return k == nil || !k.ReadOnly && !k.HasChildren
+}

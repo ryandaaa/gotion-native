@@ -49,7 +49,9 @@ type panel struct {
 
 	// the slash menu
 	slash slashState
-	width float32
+	// the grip beside blocks
+	handle handleState
+	width  float32
 	// textWidth is the width of the page's text, which tables draw across.
 	textWidth float32
 	// readOnly holds what each read-only paragraph holds (guardReadOnly).
