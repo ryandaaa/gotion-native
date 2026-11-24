@@ -497,7 +497,9 @@ func iconButton(c *ui.Context, p palette, s *ui.SVG, label string) bool {
 
 func navButton(c *ui.Context, p palette, s *ui.SVG, label string, on bool) bool {
 	b := ui.Box(c.Key(label)).Padding(5).Radius(6).Label(label).Tooltip(label)
-	color := p.Line
+	// Off, it stays a clear gray, as a control that can't be used now
+	// does: the line's color was lost over the glass.
+	color := p.Faint.Alpha(0.5)
 	if on {
 		color = p.Muted
 		b.Cursor(ui.CursorPointer)
@@ -736,11 +738,15 @@ func (a *App) pageBody(c *ui.Context, i int, pn *panel, n *node, width, pad floa
 		}
 	}
 	col.Children(func() {
+		// The page's emoji stands above its title, as Notion shows it,
+		// not in the line of the title.
+		if n != nil && n.Emoji != "" {
+			ui.Row(c).PaddingX(pad).Children(func() { emoji.View(c, n.Emoji, 52) })
+		}
 		ui.Row(c).PaddingX(pad).AlignItems(ui.Center).Gap(10).Children(func() {
-			if n != nil && n.Emoji != "" {
-				emoji.View(c, n.Emoji, 34)
-			}
-			in := ui.TextInput(c.Key("title"+pn.id), &pn.title).Placeholder(tr.T("Tanpa judul")).FontSize(30).FontWeight(700).
+			// The title is larger than any heading in the text: 40 against
+			// the first level's 30.
+			in := ui.TextInput(c.Key("title"+pn.id), &pn.title).Placeholder(tr.T("Tanpa judul")).FontSize(40).FontWeight(700).
 				Grow(1).Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).Label(tr.T("Judul halaman"))
 			if in.Changed() {
 				pn.titleDirty, pn.titleEdit = true, time.Now()
@@ -932,7 +938,7 @@ func (a *App) prose(pad float32) *richtext.Theme {
 		CodeBlockRadius:     0.4,
 		CodeBlockPadding:    [2]float32{1, 0.8},
 		Headings: [6]richtext.HeadingStyle{
-			{Size: 1.875, Weight: 700, Top: 1.0, Bottom: 0.45, LineHeight: 1.25},
+			{Size: 1.875, Weight: 650, Top: 1.0, Bottom: 0.45, LineHeight: 1.25},
 			{Size: 1.5, Weight: 650, Top: 1.05, Bottom: 0.4, LineHeight: 1.3},
 			{Size: 1.25, Weight: 600, Top: 0.95, Bottom: 0.35, LineHeight: 1.35},
 		},

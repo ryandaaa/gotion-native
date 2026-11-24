@@ -113,7 +113,7 @@ func (a *App) editable(c *ui.Context, t *tableView, r *notion.Page, col notion.P
 func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col notion.Property) {
 	p := a.pal()
 	e := &t.edit
-	ui.Column(c).Width(260).Padding(4).Gap(4).Children(func() {
+	ui.Column(c).Width(260).Padding(6).Gap(6).Children(func() {
 		ui.Text(c, col.Name).FontSize(12).FontWeight(600).TextColor(p.Faint).Padding(2, 4)
 		switch col.Type {
 		case "select", "status", "multi_select":
@@ -180,63 +180,7 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 		case "people", "relation":
 			a.linksEditor(c, t, r, col)
 		case "date":
-			ui.Row(c).Justify(ui.Center).Children(func() {
-				if ui.Calendar(c, &e.date).Browse().AutoFocus().Changed() {
-					e.err = ""
-					if a.setCell(t, r, col, e.date.Format("2006-01-02"), false, nil) {
-						e.open = false
-					}
-				}
-			})
-			in := ui.TextInput(c, &e.text).Placeholder(tr.T("TTTT-BB-HH")).Label(col.Name).FontSize(13)
-			if in.Changed() {
-				e.err = ""
-				if parsed, err := time.Parse("2006-01-02", strings.TrimSpace(e.text)); err == nil {
-					e.date = parsed
-				}
-			}
-			if e.err != "" {
-				ui.Text(c, e.err).FontSize(12).TextColor(c.Theme().Danger).Padding(0, 4)
-			}
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				todayBtn := ui.ButtonBase(c.Key("today")).Role(ui.RoleButton).Label(tr.T("Hari ini")).
-					Padding(5, 8).Radius(6).Cursor(ui.CursorPointer)
-				if todayBtn.Pressed() {
-					todayBtn.Background(p.Line)
-				} else if todayBtn.Hovered() {
-					todayBtn.Background(p.Hover)
-				}
-				todayBtn.Children(func() {
-					ui.Text(c, tr.T("Hari ini")).FontSize(13).TextColor(p.Muted)
-				})
-				if todayBtn.Clicked() {
-					e.err = ""
-					if a.setCell(t, r, col, nowFunc().Format("2006-01-02"), false, nil) {
-						e.open = false
-					}
-				}
-				if hasValue(r.Properties[col.Name]) {
-					clearBtn := ui.ButtonBase(c.Key("clear")).Role(ui.RoleButton).Label(tr.T("Kosongkan")).
-						Padding(5, 8).Radius(6).Cursor(ui.CursorPointer)
-					if clearBtn.Pressed() {
-						clearBtn.Background(p.Line)
-					} else if clearBtn.Hovered() {
-						clearBtn.Background(p.Hover)
-					}
-					clearBtn.Children(func() {
-						ui.Text(c, tr.T("Kosongkan")).FontSize(13).TextColor(p.Muted)
-					})
-					if clearBtn.Clicked() {
-						e.err = ""
-						a.setCell(t, r, col, "", false, nil)
-						e.open = false
-					}
-				}
-				ui.Box(c).Grow(1)
-				if (in.Submitted() || ui.PrimaryButton(c, tr.T("Simpan")).Clicked()) && a.setCell(t, r, col, e.text, false, nil) {
-					e.open = false
-				}
-			})
+			a.dateEditor(c, t, r, col)
 		default:
 			hint := map[string]string{"number": tr.T("Angka"), "url": "https://", "email": tr.T("nama@contoh.com"), "phone_number": "+62…"}[col.Type]
 			in := ui.TextInput(c, &e.text).Placeholder(hint).AutoFocus().Label(col.Name)
@@ -258,6 +202,71 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 			})
 		}
 	})
+}
+
+// dateEditor is the popover of a date: the date typed, the month to pick
+// it from, and below a line, Today and Clear beside Save.
+func (a *App) dateEditor(c *ui.Context, t *tableView, r *notion.Page, col notion.Property) {
+	p := a.pal()
+	e := &t.edit
+	in := ui.TextInput(c, &e.text).Placeholder(tr.T("TTTT-BB-HH")).Label(col.Name).FontSize(13).
+		Padding(7, 10).Radius(8).Border(1, p.Line).FocusRing(false)
+	if in.Focused() {
+		in.Border(1, p.Accent)
+	}
+	if in.Changed() {
+		e.err = ""
+		if parsed, err := time.Parse("2006-01-02", strings.TrimSpace(e.text)); err == nil {
+			e.date = parsed
+		}
+	}
+	if e.err != "" {
+		ui.Text(c, e.err).FontSize(12).TextColor(c.Theme().Danger).Padding(0, 4)
+	}
+	// The month in the app's theme, the days of the months around it
+	// lighter than its own, the days a little rounder.
+	ct := *c.Theme()
+	ct.TextMuted = p.Faint.Alpha(0.55)
+	ct.Radius = 8
+	ui.Themed(c, &ct).Background(ui.Transparent).AlignItems(ui.Center).Padding(2, 0).Children(func() {
+		if ui.Calendar(c, &e.date).Browse().AutoFocus().Changed() {
+			e.err = ""
+			if a.setCell(t, r, col, e.date.Format("2006-01-02"), false, nil) {
+				e.open = false
+			}
+		}
+	})
+	ui.Box(c).FillWidth().Height(1).Background(p.Line)
+	ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
+		if ghostButton(c, p, tr.T("Hari ini")) {
+			e.err = ""
+			if a.setCell(t, r, col, nowFunc().Format("2006-01-02"), false, nil) {
+				e.open = false
+			}
+		}
+		if hasValue(r.Properties[col.Name]) && ghostButton(c, p, tr.T("Kosongkan")) {
+			e.err = ""
+			a.setCell(t, r, col, "", false, nil)
+			e.open = false
+		}
+		ui.Box(c).Grow(1)
+		if (in.Submitted() || ui.PrimaryButton(c, tr.T("Simpan")).Clicked()) && a.setCell(t, r, col, e.text, false, nil) {
+			e.open = false
+		}
+	})
+}
+
+// ghostButton is a quiet button: its label, a background under the
+// pointer.
+func ghostButton(c *ui.Context, p palette, label string) bool {
+	b := ui.ButtonBase(c.Key(label)).Role(ui.RoleButton).Label(label).Padding(6, 10).Radius(6).Cursor(ui.CursorPointer)
+	if b.Pressed() {
+		b.Background(p.Line)
+	} else if b.Hovered() {
+		b.Background(p.Hover)
+	}
+	b.Children(func() { ui.Text(c, label).FontSize(13).TextColor(p.Muted) })
+	return b.Clicked()
 }
 
 // addRow is the line under the table that adds a row, its title typed in

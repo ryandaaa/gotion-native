@@ -236,9 +236,6 @@ type settings struct {
 	Wash         string          `json:"wash"`    // the color behind the cards
 	Trashed      []trashed       `json:"trashed"` // pages put in the trash from gotion
 	Glass        bool            `json:"glass"`   // the system's glass behind them
-	// GlassKind is Windows' material for the glass: "mica" (or "") tints
-	// with the wallpaper, "acrylic" blurs what is behind the window.
-	GlassKind string `json:"glassKind"`
 	// Views is how each database shows: "table" or "cards".
 	Views map[string]string `json:"views"`
 	// Language is "id" or "en", or "" to follow the system's.

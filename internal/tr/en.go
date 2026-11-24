@@ -83,8 +83,6 @@ var en = map[string]string{
 	"Notion tidak menjawab. Coba lagi sebentar lagi.":                                                                  "Notion is not answering. Try again in a moment.",
 	"Tidak terhubung ke Notion. Periksa koneksi internet.":                                                             "Can't reach Notion. Check your internet connection.",
 	"Terang atau gelap mengikuti wallpaper di belakang sidebar. Jendela aplikasi lain di belakangnya tidak terhitung.": "Light or dark follows the wallpaper behind the sidebar. Other apps' windows behind it are not counted.",
-	"Mica: rona wallpaper yang tenang, teks selalu terbaca.":                                                           "Mica: a calm tint of your wallpaper; text always reads.",
-	"Acrylic: blur penuh, yang di belakang jendela ikut terlihat.":                                                     "Acrylic: full blur; what is behind the window shows through.",
 	"Gagal menyimpan ke Notion: ":                                                                                      "Could not save to Notion: ",
 
 	// Sign in

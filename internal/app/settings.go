@@ -8,7 +8,6 @@ import (
 	"gotion/internal/wallpaper"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -99,28 +98,6 @@ func (a *App) appearance(c *ui.Context) {
 		if !ok {
 			ui.Text(c, tr.T("Belum didukung di Linux: sistemnya tidak menyediakan efek kaca. Tersedia di macOS dan Windows 11.")).
 				FontSize(11).TextColor(p.Faint)
-		}
-		if ok && on && runtime.GOOS == "windows" {
-			ui.Row(c).Gap(2).Padding(2).Radius(8).Background(p.Sidebar).Children(func() {
-				for _, k := range []struct{ id, label string }{{"mica", "Mica"}, {"acrylic", "Acrylic"}} {
-					o := ui.Text(c.Key("glass"+k.id), k.label).FontSize(13).Padding(5, 0).Grow(1).TextAlign(ui.Center).Radius(6).Cursor(ui.CursorPointer)
-					if a.set.GlassKind == k.id || a.set.GlassKind == "" && k.id == "mica" {
-						o.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
-					} else {
-						o.TextColor(p.Muted)
-					}
-					if o.Clicked() {
-						a.set.GlassKind = k.id
-						a.saveSettings()
-						a.applyGlass()
-					}
-				}
-			})
-			hint := tr.T("Mica: rona wallpaper yang tenang, teks selalu terbaca.")
-			if a.set.GlassKind == "acrylic" {
-				hint = tr.T("Acrylic: blur penuh, yang di belakang jendela ikut terlihat.")
-			}
-			ui.Text(c, hint).FontSize(11).TextColor(p.Faint)
 		}
 	})
 }
