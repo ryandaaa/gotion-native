@@ -4,6 +4,12 @@ compatibility_date = "2026-11-01"
 account_id = "1c73f06b1e20ec6d3ed31016c7937acd"
 routes = [{ pattern = "gotion.ryanda.my.id", custom_domain = true }]
 
+# The landing, privacy and terms pages: served as they are, before the
+# Worker, which answers the paths no file has (/login, /callback, /refresh).
+[assets]
+directory = "./public"
+html_handling = "drop-trailing-slash"
+
 # Set the integration's credentials as secrets, not here:
 #   npx wrangler secret put NOTION_CLIENT_ID
 #   npx wrangler secret put NOTION_CLIENT_SECRET
