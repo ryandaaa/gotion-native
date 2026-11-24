@@ -249,7 +249,6 @@ var en = map[string]string{
 	"Gagal mengimpor ": "Could not import ",
 	"” diimpor":        "” imported",
 	"Impor Markdown":   "Import Markdown",
-	"Cari di pustaka":  "Search the library",
 	" item":            " items",
 	"Terakhir diubah":  "Last edited",
 	"Halaman yang kamu buang dari gotion. Notion menyimpannya 30 hari; sampah dari Notion web tidak terlihat di sini, karena API Notion tidak menampilkannya.": "Pages you moved to the trash from gotion. Notion keeps them for 30 days. Pages trashed on Notion's website don't show here, because Notion's API doesn't list them.",

@@ -52,9 +52,8 @@ type trashed struct {
 	ParentID         string
 }
 
-// libraryState is the Pustaka page: what it looks for and how it sorts.
+// libraryState is the Pustaka page: how it filters and sorts.
 type libraryState struct {
-	query string
 	kind  string // "", "page" or "db"
 	order string // "edited" or "title"
 }
@@ -65,16 +64,12 @@ func (a *App) libraryPanel(c *ui.Context, i int) {
 	l := &a.library
 	a.panelHeader(c, i, iconLibrary, tr.T("Pustaka"), "pustaka", nil)
 	var items []*node
-	q := strings.ToLower(strings.TrimSpace(l.query))
 	for _, n := range a.nodes {
 		if isSpecial(n.Kind) {
 			continue
 		}
 		isDB := n.Kind != "page"
 		if l.kind == "page" && isDB || l.kind == "db" && !isDB {
-			continue
-		}
-		if q != "" && !strings.Contains(strings.ToLower(n.Title), q) {
 			continue
 		}
 		items = append(items, n)
@@ -86,22 +81,15 @@ func (a *App) libraryPanel(c *ui.Context, i int) {
 		return byEditedThenTitle(items[x], items[y])
 	})
 	ui.Column(c).Grow(1).MinHeight(0).Padding(24, 32, 0, 32).Gap(14).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
+		ui.Row(c).AlignItems(ui.Center).Gap(10).Wrap().Children(func() {
 			ui.Text(c, tr.T("Pustaka")).FontSize(26).FontWeight(700)
 			ui.Text(c, itoa(len(items))+tr.T(" item")).FontSize(13).TextColor(p.Faint)
 			ui.Box(c).Grow(1)
+			a.segmented(c, "lib-kind", &l.kind, []struct{ id, label string }{{"", tr.T("Semua")}, {"page", tr.T("Halaman")}, {"db", "Database"}})
+			a.segmented(c, "lib-order", &l.order, []struct{ id, label string }{{"edited", tr.T("Terakhir diubah")}, {"title", tr.T("Judul")}})
 			if a.btn(c, tr.T("Impor Markdown"), iconImport, false, false) {
 				a.importMarkdownDialog(i)
 			}
-		})
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Wrap().Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 12).Radius(8).Background(p.Sidebar).Width(320).Children(func() {
-				ui.Icon(c, iconSearch).Size(14, 14).TextColor(p.Faint)
-				ui.TextInput(c, &l.query).Placeholder(tr.T("Cari di pustaka")).Grow(1).Label(tr.T("Cari")).
-					Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).FontSize(14)
-			})
-			a.segmented(c, "lib-kind", &l.kind, []struct{ id, label string }{{"", tr.T("Semua")}, {"page", tr.T("Halaman")}, {"db", "Database"}})
-			a.segmented(c, "lib-order", &l.order, []struct{ id, label string }{{"edited", tr.T("Terakhir diubah")}, {"title", tr.T("Judul")}})
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).ScrollbarStyle(a.thinScrollbar()).Children(func() {
 			// Room on the right: the scroll bar runs beside the rows, not on them.

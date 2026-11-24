@@ -29,10 +29,18 @@ func TestLibraryAndTrash(t *testing.T) {
 	if _, ok := tester.Find("Halaman dua"); !ok {
 		t.Error("the library lists no page")
 	}
-	// Database only: the segmented choice, clicked where it is (the
-	// sidebar has a "Database" heading too).
+	// Database only: the segmented choice, clicked dynamically relative to
+	// its row neighbours (the sidebar has a "Database" heading too).
 	before := strings.Count(strings.Join(tester.Texts(), "|"), "Halaman dua")
-	tester.ClickAt(822, 174)
+	semua, ok := tester.Find("Semua")
+	if !ok {
+		t.Fatal("Semua segment not found")
+	}
+	urut, ok := tester.Find("Terakhir diubah")
+	if !ok {
+		t.Fatal("Terakhir diubah segment not found")
+	}
+	tester.ClickAt(urut.X-40, semua.Y+semua.H/2)
 	tester.Frame()
 	if a.library.kind != "db" {
 		t.Fatalf("kind %q", a.library.kind)
