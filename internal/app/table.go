@@ -244,7 +244,7 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 				}
 			})
 			for k, r := range t.rows {
-				row := ui.Row(c.Key("row"+r.ID)).Cursor(ui.CursorPointer)
+				row := ui.Row(c.Key("row" + r.ID)).Cursor(ui.CursorPointer)
 				if k < len(t.rows)-1 {
 					row.BorderWidth(0, 0, 1, 0).BorderColor(p.Line)
 				}
