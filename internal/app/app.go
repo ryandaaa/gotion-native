@@ -5,7 +5,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"gotion/internal/tr"
 	"os"
 	"path/filepath"
@@ -257,8 +256,7 @@ func loadSettings() settings {
 
 func (a *App) saveSettings() {
 	if b, err := json.MarshalIndent(a.set, "", "  "); err == nil {
-		os.MkdirAll(configDir(), 0o700)
-		os.WriteFile(filepath.Join(configDir(), "settings.json"), b, 0o600)
+		writeWhole(filepath.Join(configDir(), "settings.json"), b)
 	}
 }
 
@@ -356,16 +354,7 @@ func (a *App) signOut() {
 	a.saveSettings()
 }
 
-func errText(err error) string {
-	var e *notion.Error
-	if errors.As(err, &e) {
-		if e.Message != "" {
-			return e.Message
-		}
-		return e.Code
-	}
-	return err.Error()
-}
+func errText(err error) string { return syncer.Explain(err) }
 
 // --- the page tree ---
 
@@ -407,7 +396,7 @@ func (a *App) setPages(pages []*notion.Page) {
 	old := a.nodes
 	a.nodes = map[string]*node{}
 	for _, p := range pages {
-		if p.InTrash {
+		if p == nil || p.InTrash {
 			continue
 		}
 		kind := "page"
@@ -468,8 +457,17 @@ func (a *App) regroup() {
 
 func (a *App) saveCache(pages []*notion.Page) {
 	if b, err := json.Marshal(pages); err == nil {
-		os.MkdirAll(configDir(), 0o700)
-		os.WriteFile(filepath.Join(configDir(), "pages.json"), b, 0o600)
+		writeWhole(filepath.Join(configDir(), "pages.json"), b)
+	}
+}
+
+// writeWhole writes a file through a temporary one beside it, so a crash
+// mid-write leaves the old file instead of half of the new.
+func writeWhole(path string, b []byte) {
+	os.MkdirAll(filepath.Dir(path), 0o700)
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil && os.Rename(tmp, path) != nil {
+		os.Remove(tmp)
 	}
 }
 

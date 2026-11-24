@@ -78,8 +78,11 @@ var en = map[string]string{
 	"Belum sync":  "Not synced",
 	"Sinkron…":    "Syncing…",
 	"Gagal":       "Failed",
-	"Offline: edit disimpan di komputer dan dikirim saat koneksi kembali": "Offline: edits are kept on this computer and sent when you are back online",
-	"Gagal menyimpan ke Notion: ":                                         "Could not save to Notion: ",
+	"Offline: edit disimpan di komputer dan dikirim saat koneksi kembali":    "Offline: edits are kept on this computer and sent when you are back online",
+	"Akses ke Notion berakhir. Keluar lalu masuk lagi di Pengaturan → Akun.": "Your access to Notion has ended. Sign out and sign in again in Settings → Account.",
+	"Notion tidak menjawab. Coba lagi sebentar lagi.":                        "Notion is not answering. Try again in a moment.",
+	"Tidak terhubung ke Notion. Periksa koneksi internet.":                   "Can't reach Notion. Check your internet connection.",
+	"Gagal menyimpan ke Notion: ":                                            "Could not save to Notion: ",
 
 	// Sign in
 	"Hubungkan ke Notion": "Connect to Notion",

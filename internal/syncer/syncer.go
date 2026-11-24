@@ -6,13 +6,16 @@ package syncer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"gotion/internal/tr"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +45,10 @@ const (
 	idle     = 1500 * time.Millisecond // send after this long without typing
 	maxDelay = 5 * time.Second         // or after this long typing
 	poll     = 15 * time.Second        // look for changes made elsewhere
+	// After a failed send the next try waits longer each time, up to this.
+	maxBackoff = 30 * time.Second
+	// closeWait is how long closing a page tries to send what is left.
+	closeWait = 5 * time.Second
 )
 
 // Session syncs one page.
@@ -74,6 +81,10 @@ type Session struct {
 	force   bool // pull on the next tick, changed or not
 	unsaved bool // pending holds edits not yet written to the cache
 	sent    bool // pending was restored from disk, and pushed since
+
+	fails   int       // sends failed in a row
+	retryAt time.Time // no send before this, after a failure
+	said    string    // the failure last told, not told again
 }
 
 // CacheDir is where pages are kept between runs; "" keeps none.
@@ -240,16 +251,28 @@ func (s *Session) Start() {
 	go s.run(ctx)
 }
 
-// Close sends what is left, then stops.
+// Close sends what is left, for a few seconds at most, then stops. What
+// could not be sent stays on disk for the next run.
 func (s *Session) Close() {
 	s.mu.Lock()
 	pending := s.pending
 	s.mu.Unlock()
 	if pending != nil {
-		s.push(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), closeWait)
+		s.push(ctx)
+		cancel()
 	}
 	if s.cancel != nil {
 		s.cancel()
+	}
+	s.mu.Lock()
+	var save *unsent
+	if s.pending != nil {
+		save = &unsent{Text: *s.pending, Known: s.known}
+	}
+	s.mu.Unlock()
+	if save != nil {
+		writeJSON(cacheFile(s.PageID, "unsent"), save)
 	}
 }
 
@@ -261,6 +284,7 @@ func (s *Session) Edited(text richtext.Text) {
 		s.first = now
 	}
 	s.pending, s.last, s.unsaved = &text, now, true
+	s.retryAt = time.Time{} // typing again tries again
 	changed := s.status != Pending && s.status != Syncing
 	if changed {
 		s.status = Pending
@@ -302,7 +326,8 @@ func (s *Session) run(ctx context.Context) {
 		case <-tick.C:
 		}
 		s.mu.Lock()
-		due := s.pending != nil && (time.Since(s.last) >= idle || time.Since(s.first) >= maxDelay)
+		due := s.pending != nil && (time.Since(s.last) >= idle || time.Since(s.first) >= maxDelay) &&
+			!time.Now().Before(s.retryAt)
 		quiet := s.pending == nil
 		force := s.force && quiet
 		var save *unsent
@@ -352,6 +377,23 @@ func (s *Session) push(ctx context.Context) {
 		}
 	}
 	s.status, s.err = next, err
+	var msg string
+	if err != nil {
+		s.fails++
+		s.retryAt = time.Now().Add(min(idle<<s.fails, maxBackoff))
+		if next == Offline {
+			msg = tr.T("Offline: edit disimpan di komputer dan dikirim saat koneksi kembali")
+		} else {
+			msg = tr.T("Gagal menyimpan ke Notion: ") + Explain(err)
+		}
+		if msg == s.said {
+			msg = "" // told already
+		} else {
+			s.said = msg
+		}
+	} else {
+		s.fails, s.retryAt, s.said = 0, time.Time{}, ""
+	}
 	done := s.pending == nil && err == nil
 	if done && s.sent {
 		// Restored edits are in Notion: show the page as Notion has it.
@@ -363,12 +405,8 @@ func (s *Session) push(ctx context.Context) {
 			os.Remove(f)
 		}
 	}
-	if err != nil && s.OnError != nil {
-		if next == Offline {
-			s.OnError(tr.T("Offline: edit disimpan di komputer dan dikirim saat koneksi kembali"))
-		} else {
-			s.OnError(tr.T("Gagal menyimpan ke Notion: ") + err.Error())
-		}
+	if msg != "" && s.OnError != nil {
+		s.OnError(msg)
 	}
 	s.notify()
 }
@@ -408,7 +446,15 @@ func (s *Session) apply(ctx context.Context, items []doc.Item) error {
 				log.Printf("gotion: %s has children, its type stays %s", k.NotionID, t)
 			}
 			if _, err := s.client.UpdateBlock(ctx, k.NotionID, t, payload); err != nil {
-				return err
+				if !blockGone(err) {
+					return err
+				}
+				// Deleted elsewhere since: make it again with the edit.
+				delete(s.known, it.ID)
+				if err := s.create(ctx, items, i); err != nil {
+					return err
+				}
+				continue
 			}
 			k.Hash = it.Hash
 		default:
@@ -475,6 +521,36 @@ func (s *Session) create(ctx context.Context, items []doc.Item, i int) error {
 	}
 	s.known[it.ID] = &doc.Known{NotionID: b.ID, Type: it.Type, Parent: parent, Hash: it.Hash}
 	return nil
+}
+
+// Explain says what went wrong in words for the user: what Notion said,
+// what to do when its access ended, or that there is no connection.
+func Explain(err error) string {
+	var e *notion.Error
+	if errors.As(err, &e) {
+		switch {
+		case e.Status == 401:
+			return tr.T("Akses ke Notion berakhir. Keluar lalu masuk lagi di Pengaturan → Akun.")
+		case e.Message != "":
+			return e.Message
+		}
+		return e.Code
+	}
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		if ue.Timeout() {
+			return tr.T("Notion tidak menjawab. Coba lagi sebentar lagi.")
+		}
+		return tr.T("Tidak terhubung ke Notion. Periksa koneksi internet.")
+	}
+	return err.Error()
+}
+
+// blockGone reports whether Notion refused to change a block because it
+// was deleted: not found, or in the trash.
+func blockGone(err error) bool {
+	e, ok := err.(*notion.Error)
+	return ok && (e.Status == 404 || e.Status == 400 && strings.Contains(e.Message, "archived"))
 }
 
 func gone(err error) bool {
