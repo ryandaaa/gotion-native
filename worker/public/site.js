@@ -42,6 +42,23 @@
     });
   });
 
+  // The scroll progress line, where CSS can't move it by itself.
+  var bar = document.createElement("div");
+  bar.className = "progress";
+  bar.setAttribute("aria-hidden", "true");
+  document.body.prepend(bar);
+  if (!(window.CSS && CSS.supports && CSS.supports("animation-timeline: scroll()"))) {
+    var ticking = false;
+    var paint = function () {
+      ticking = false;
+      var max = document.documentElement.scrollHeight - innerHeight;
+      bar.style.setProperty("--p", max > 0 ? Math.min(scrollY / max, 1) : 0);
+    };
+    addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(paint); } }, { passive: true });
+    addEventListener("resize", paint);
+    paint();
+  }
+
   // The visitor's system, as far as the browser tells.
   function system() {
     var ua = navigator.userAgent || "";

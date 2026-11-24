@@ -82,7 +82,7 @@ code, kbd { font: 500 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monos
 @media (min-width: 720px) { .wrap { padding: 0 32px; } }
 
 /* The bar at the top */
-.top { display: flex; align-items: center; gap: 8px 20px; flex-wrap: wrap; padding: 20px 0; }
+.top { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px 20px; flex-wrap: wrap; padding: 20px 0; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; text-decoration: none; min-height: 44px; }
 .brand img { width: 28px; height: 28px; }
 .top nav { margin-left: auto; display: flex; align-items: center; gap: 4px 18px; flex-wrap: wrap; font-size: 15px; }
@@ -112,6 +112,7 @@ html { transition: background-color .25s ease; }
    window, centered on it, and fades out at its edges; site.js draws it. */
 main { position: relative; isolation: isolate; }
 .dots {
+  pointer-events: none;
   position: absolute; z-index: -1; top: -110px; height: min(760px, 110vh); left: 50%; width: 100vw; transform: translateX(-50%);
   -webkit-mask-image: radial-gradient(ellipse 70% 75% at 50% 40%, #000 30%, transparent 100%);
           mask-image: radial-gradient(ellipse 70% 75% at 50% 40%, #000 30%, transparent 100%);
@@ -231,3 +232,24 @@ footer .spacer { flex: 1; }
 .doc ul { padding-left: 1.2em; }
 .doc li { margin: 6px 0; }
 .doc code { overflow-wrap: anywhere; }
+
+/* The scrollbar: thin, the color of the faint text, a little darker on
+   hover; the page's own background behind it. */
+html { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--faint) 55%, transparent) transparent; }
+@supports not (scrollbar-color: red blue) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--faint) 55%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--faint); }
+}
+
+/* How far down the page is: a thin accent line along the top. CSS moves
+   it with the scroll where the browser can; site.js does elsewhere. */
+.progress {
+  position: fixed; z-index: 10; top: 0; left: 0; right: 0; height: 3px; pointer-events: none;
+  background: var(--accent); transform-origin: 0 50%; transform: scaleX(var(--p, 0));
+}
+@supports (animation-timeline: scroll()) {
+  .progress { animation: progress linear both; animation-timeline: scroll(root block); }
+  @keyframes progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+}
