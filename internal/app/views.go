@@ -733,10 +733,14 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	}
 	pad := padding(width, a.set.FullWidth)
 	pn.textWidth = width - 2*pad
-	a.coverView(c, pn)
-	// The page, and its comments beside it when open.
+	// The page, and its comments beside it when open. The cover, the title,
+	// the properties and the text scroll as one, as in Notion: the editor is
+	// as tall as its text, in the page's scroll.
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		a.pageBody(c, i, pn, n, width, pad)
+		ui.Scroll(c.Key("page-scroll" + pn.id)).Grow(1).MinWidth(0).MinHeight(0).ScrollbarStyle(a.thinScrollbar()).Children(func() {
+			a.coverView(c, pn)
+			a.pageBody(c, i, pn, n, width, pad)
+		})
 		if pn.comments.open {
 			a.commentsDrawer(c, pn)
 		}
@@ -745,7 +749,7 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 
 // pageBody is the page's title and text.
 func (a *App) pageBody(c *ui.Context, i int, pn *panel, n *node, width, pad float32) {
-	col := ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).Padding(24, 0, 0, 0).Gap(10)
+	col := ui.Column(c).FillWidth().Shrink(0).Padding(24, 0, 0, 0).Gap(10)
 	if b := col.LayoutBounds(); b.W > 0 {
 		pn.width, a.widths[i] = b.W, b.W
 		// Tables draw with the width this frame laid the text out for
@@ -806,9 +810,7 @@ func nonEmpty(s, alt string) string {
 // editor is the page's text, with the slash menu and the format bar over it.
 func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 	p := a.pal()
-	// Clip: what the editor draws itself (tables, images) must not show
-	// over the title when scrolled up past it.
-	box := ui.Box(c).Grow(1).MinHeight(0).Clip()
+	box := ui.Box(c).FillWidth().Shrink(0)
 	if files := box.DroppedFiles(); len(files) > 0 {
 		// Markdown comes in as sub-pages; anything else as attachments.
 		var md, other []string
@@ -851,10 +853,13 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 			OnCommand: func(name string) bool { return name == "paste" && a.pasteImage(pn) },
 			Font:      ui.Font{Family: "Inter", Size: 16, LineHeight: 1.7},
 			Space:     func(int) float32 { return 3 },
-		}).Fill().Background(p.Panel).Border(0, p.Panel).Radius(0)
+			// The page scrolls around it, with its own bar.
+			NoScrollbar: true,
+		}).FillWidth().Height(editorHeight(pn.doc)).Background(p.Panel).Border(0, p.Panel).Radius(0)
 		if pn.focusEditor {
 			pn.focusEditor = false
 			e.Focus()
+			pn.revealCaret = true
 		}
 		if e.Focused() {
 			a.focus = i
@@ -887,6 +892,27 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 		a.mentionView(c, pn)
 		if e.Focused() && !pn.slash.open {
 			a.formatBar(c, pn)
+		}
+		a0, c0 := pn.doc.Selection()
+		ver := pn.doc.Version()
+		if !pn.caretInit {
+			pn.caretInit = true
+			pn.caretSeen, pn.verSeen = [2]int{a0, c0}, ver
+		} else if pn.caretSeen != [2]int{a0, c0} || pn.verSeen != ver {
+			pn.caretSeen, pn.verSeen = [2]int{a0, c0}, ver
+			if e.Focused() {
+				pn.revealCaret = true
+			}
+		}
+		if pn.revealCaret {
+			if !e.Focused() {
+				pn.revealCaret = false
+			} else if _, ok := pn.doc.CaretRect(); ok {
+				pn.revealCaret = false
+				e.ScrollIntoView()
+			} else {
+				c.AnimationFrame()
+			}
 		}
 	})
 }
@@ -1007,4 +1033,15 @@ func (a *App) hasPages() bool {
 		}
 	}
 	return len(a.databases) > 0
+}
+
+// editorHeight is the height of a page's text plus room below it to click
+// into; the extra room also keeps the editor taller than its text so wheel
+// events always scroll the page around it rather than the editor itself.
+func editorHeight(d *richtext.Document) float32 {
+	h, ok := d.ContentHeight()
+	if !ok {
+		h = float32(d.Text().ParagraphCount()) * 100
+	}
+	return max(h+96, 240)
 }

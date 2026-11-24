@@ -112,15 +112,15 @@ func TestSplitSettlesAtOnce(t *testing.T) {
 }
 
 // TestScrolledTableStaysInEditor renders a table in a narrow, scrolled
-// editor; SHOT=<dir> saves it to look at.
+// page; SHOT=<dir> saves it to look at.
 func TestScrolledTableStaysInEditor(t *testing.T) {
 	a := tableApp(t)
 	a.panels[1] = tablePanel(t, "two", "Dua")
 	tester := ui.NewTester(a.View, 1280, 380)
 	tester.Frame()
-	a.panels[0].doc.ScrollBy(120)
-	a.panels[1].doc.ScrollBy(120)
-	tester.Frame()
+	tester.Wheel(450, 250, 0, 120)
+	tester.Wheel(950, 250, 0, 120)
+	tester.Advance(time.Second)
 	snapshot(t, tester, "table-scrolled")
 }
 

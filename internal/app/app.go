@@ -64,6 +64,12 @@ type panel struct {
 	cover coverState
 	// focusEditor gives the editor the keyboard on its next frame.
 	focusEditor bool
+	// caret tracking so typing or moving the caret brings it into view in
+	// the page's scroll without fighting the wheel.
+	caretInit   bool
+	caretSeen   [2]int
+	verSeen     uint64
+	revealCaret bool
 	width       float32
 	// textWidth is the width of the page's text, which tables draw across.
 	textWidth float32
@@ -783,6 +789,8 @@ func (a *App) openPage(p *panel, id string) {
 				a.update(func() {
 					if p.session == s {
 						d.SetText(text)
+						a0, c0 := d.Selection()
+						p.caretSeen, p.verSeen = [2]int{a0, c0}, d.Version()
 						p.extras = extras
 						a.guardReadOnly(p)
 						a.registerChildren(id, extras)
