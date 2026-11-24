@@ -41,7 +41,12 @@ type User struct {
 	Name   string `json:"name"`
 	Type   string `json:"type"`
 	Bot    *struct {
-		WorkspaceName string `json:"workspace_name"`
+		WorkspaceName   string `json:"workspace_name"`
+		WorkspaceLimits struct {
+			// MaxFileUploadSize is the largest file the workspace takes:
+			// 5 MiB on a free plan.
+			MaxFileUploadSize int64 `json:"max_file_upload_size_in_bytes"`
+		} `json:"workspace_limits"`
 	} `json:"bot,omitempty"`
 }
 

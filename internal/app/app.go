@@ -90,6 +90,10 @@ type App struct {
 	switcher switcherState
 	// oauth is a sign-in through Notion's page in progress.
 	oauth *oauthState
+	// viewer shows a picture full size.
+	viewer viewer
+	// imageOf finds a picture by its block where no session holds it: tests.
+	imageOf func(id string) ui.ImageSource
 	// themeOpen shows the theme picker.
 	themeOpen bool
 	sideList  ui.ListState
@@ -616,6 +620,12 @@ func (a *App) followLink(i int) func(url string) {
 				parent = p.id
 			}
 			switch kind {
+			case "image":
+				if img := a.imageIn(p, id); img != nil {
+					a.viewer = viewer{open: true, img: img}
+				}
+			case "file":
+				a.download(id)
 			case "page":
 				a.openID(id, "page", parent, i)
 			case "db":
@@ -758,4 +768,15 @@ func (a *App) newPage(parent string) {
 			a.toast("Halaman baru dibuat")
 		})
 	}()
+}
+
+// imageIn is a picture of panel p's page by its block.
+func (a *App) imageIn(p *panel, id string) ui.ImageSource {
+	if p != nil && p.session != nil {
+		return p.session.Image(id)
+	}
+	if a.imageOf != nil {
+		return a.imageOf(id)
+	}
+	return nil
 }

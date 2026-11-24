@@ -546,3 +546,29 @@ func (s *Session) ReadOnly() map[string]bool {
 	}
 	return out
 }
+
+// Attach adds a block after the one the editor's paragraph after shows
+// (at the end of the page when it is not in Notion yet), as an uploaded
+// picture or file, then brings the page in again to show it.
+func (s *Session) Attach(ctx context.Context, after string, b notion.NewBlock) error {
+	s.mu.Lock()
+	parent, at := s.PageID, ""
+	if k := s.known[after]; k != nil && !k.Hidden {
+		parent, at = k.Parent, k.NotionID
+	}
+	s.mu.Unlock()
+	if _, err := s.client.Append(ctx, parent, at, b); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.force = true
+	s.mu.Unlock()
+	return nil
+}
+
+// Image returns a picture of the page by its block, nil when not loaded.
+func (s *Session) Image(id string) ui.ImageSource {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.shape.Images[id]
+}

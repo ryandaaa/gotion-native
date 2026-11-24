@@ -86,6 +86,9 @@ func (a *App) View(c *ui.Context) {
 	if a.switcher.open {
 		a.switcherView(c)
 	}
+	if a.viewer.open {
+		a.viewerView(c)
+	}
 }
 
 // shortcuts are the window's keys.
@@ -812,15 +815,21 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 	p := a.pal()
 	// Clip: what the editor draws itself (tables, images) must not show
 	// over the title when scrolled up past it.
-	ui.Box(c).Grow(1).MinHeight(0).Clip().Children(func() {
+	box := ui.Box(c).Grow(1).MinHeight(0).Clip()
+	if files := box.DroppedFiles(); len(files) > 0 {
+		a.dropFiles(pn, files)
+	}
+	box.Children(func() {
 		e := richtext.Editor(c.Key("editor-"+pn.id), pn.doc, richtext.EditorOptions{
 			Theme:       a.prose(pad),
 			Label:       "Isi halaman",
 			Placeholder: "Ketik / untuk perintah…",
 			OnLink:      a.followLink(i),
 			OnKey:       func(k ui.Key, m ui.Modifiers) bool { return a.slashKey(pn, k, m) },
-			Font:        ui.Font{Family: "Inter", Size: 16, LineHeight: 1.7},
-			Space:       func(int) float32 { return 3 },
+			// A picture on the clipboard is uploaded; text pastes as ever.
+			OnCommand: func(name string) bool { return name == "paste" && a.pasteImage(pn) },
+			Font:      ui.Font{Family: "Inter", Size: 16, LineHeight: 1.7},
+			Space:     func(int) float32 { return 3 },
 		}).Fill().Background(p.Panel).Border(0, p.Panel).Radius(0)
 		if e.Focused() {
 			a.focus = i

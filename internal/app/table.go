@@ -250,7 +250,7 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 				}
 			})
 			for k, r := range t.rows {
-				row := ui.Row(c.Key("row" + r.ID)).BorderWidth(0, 0, 1, 0).BorderColor(p.Line)
+				row := ui.Row(c.Key("row"+r.ID)).BorderWidth(0, 0, 1, 0).BorderColor(p.Line)
 				row.Children(func() {
 					for j, col := range t.columns {
 						e := cellOf("c"+col.Name, col, j == len(t.columns)-1)

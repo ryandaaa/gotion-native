@@ -69,6 +69,12 @@ func glyph(kind string) richtext.Run {
 			// lowercase letters, a little lower.
 			x, y := r.X+2, r.Y+iconDrop
 			switch kind {
+			case "file":
+				// A paper with a folded corner.
+				p.Stroke(ui.Rect{X: x, Y: y, W: 12, H: 14}, c, 2, 1.3)
+				p.Line(x+8, y, x+12, y+4, 1.2, c)
+				p.Line(x+3, y+7, x+9, y+7, 1.2, c)
+				p.Line(x+3, y+10, x+9, y+10, 1.2, c)
 			case "page":
 				p.Stroke(ui.Rect{X: x, Y: y, W: 12, H: 14}, c, 2, 1.3)
 				p.Line(x+3, y+5, x+9, y+5, 1.2, c)
@@ -158,12 +164,19 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 			if w > TextWidth {
 				h, w = h*TextWidth/w, TextWidth
 			}
+			// Its link opens it full size.
 			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
-				Attributes: richtext.Attributes{Attachment: &richtext.Attachment{Image: img, Width: w, Height: h, Name: "image"}}}}}
+				Attributes: richtext.Attributes{Link: LinkPrefix + "image/" + b.ID, Attachment: &richtext.Attachment{Image: img, Width: w, Height: h, Name: "image"}}}}}
 		}
 		runs := link("open/", "🖼 Gambar — buka di Notion ↗")
 		runs[0].Attributes.Color = muted.Color
 		return richtext.Paragraph{Style: st, Runs: runs}
+	case "file", "pdf", "video", "audio":
+		name, _ := b.FileInfo()
+		if name == "" {
+			name = "Lampiran"
+		}
+		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("file")}, link("file/", name+" — unduh")...)}
 	case "table":
 		if len(b.Children) > 0 {
 			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
