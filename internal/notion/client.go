@@ -25,6 +25,11 @@ type Client struct {
 	Token string
 	HTTP  *http.Client
 	Base  string
+	// Refresh, when set, gets a new token after Notion turned the one in
+	// use down (401), as OAuth tokens expire: the request is sent again
+	// with it, once.
+	Refresh func(ctx context.Context) (string, error)
+	refresh sync.Mutex
 
 	// A token bucket: up to burst requests at once, then rate a second,
 	// as Notion averages three a second and lets bursts through.
@@ -114,7 +119,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 		if err != nil {
 			return err
 		}
-		req.Header.Set("Authorization", "Bearer "+c.Token)
+		req.Header.Set("Authorization", "Bearer "+c.token())
 		req.Header.Set("Notion-Version", Version)
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -143,6 +148,11 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 				continue
 			}
 		}
+		if resp.StatusCode == 401 && c.Refresh != nil && attempt == 0 {
+			if c.renew(ctx, req.Header.Get("Authorization")) == nil {
+				continue
+			}
+		}
 		if resp.StatusCode >= 300 {
 			e := &Error{Status: resp.StatusCode}
 			json.Unmarshal(data, e)
@@ -154,4 +164,26 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 		}
 		return nil
 	}
+}
+
+func (c *Client) token() string {
+	c.refresh.Lock()
+	defer c.refresh.Unlock()
+	return c.Token
+}
+
+// renew gets a new token, unless another request got one since sent was
+// sent with the old.
+func (c *Client) renew(ctx context.Context, sent string) error {
+	c.refresh.Lock()
+	defer c.refresh.Unlock()
+	if "Bearer "+c.Token != sent {
+		return nil // renewed meanwhile
+	}
+	tok, err := c.Refresh(ctx)
+	if err != nil {
+		return err
+	}
+	c.Token = tok
+	return nil
 }

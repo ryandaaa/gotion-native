@@ -49,7 +49,7 @@ func (a *App) openTable(pn *panel, n *node) {
 		if err == nil {
 			rows, err = client.Query(ctx, dsID, 500)
 		}
-		a.win.Update(func() {
+		a.update(func() {
 			t.loading = false
 			if err != nil {
 				t.err = errText(err)

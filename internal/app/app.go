@@ -88,6 +88,8 @@ type App struct {
 	hpos    int
 
 	switcher switcherState
+	// oauth is a sign-in through Notion's page in progress.
+	oauth *oauthState
 	// themeOpen shows the theme picker.
 	themeOpen bool
 	sideList  ui.ListState
@@ -102,8 +104,8 @@ type App struct {
 func New() *App {
 	a := &App{panels: [2]*panel{{}, nil}}
 	a.set = loadSettings()
-	if tok := loadToken(); tok != "" {
-		a.client = notion.New(tok)
+	if raw := loadToken(); raw != "" {
+		a.client = a.clientFor(parseCreds(raw))
 	}
 	a.loadCache()
 	return a
@@ -219,15 +221,25 @@ func configDir() string {
 	return filepath.Join(dir, "gotion")
 }
 
+// secrets is where credentials are kept: the system's keychain, or what a
+// test puts in its place, so that no test ever touches the user's own.
+var secrets interface {
+	Get(key string) ([]byte, error)
+	Set(key string, value []byte) error
+	Delete(key string) error
+} = mygo.Secrets.Service("gotion")
+
+// loadToken returns the saved credentials as saved: a token, or OAuth's
+// as JSON (parseCreds reads either).
 func loadToken() string {
 	if t := os.Getenv("NOTION_TOKEN"); t != "" {
-		return cleanToken(t)
+		return t
 	}
-	if b, err := mygo.Secrets.Service("gotion").Get(secretKey); err == nil {
-		return cleanToken(string(b))
+	if b, err := secrets.Get(secretKey); err == nil {
+		return string(b)
 	}
 	if b, err := os.ReadFile(filepath.Join(configDir(), "token")); err == nil {
-		return cleanToken(string(b))
+		return strings.TrimSpace(string(b))
 	}
 	return ""
 }
@@ -249,7 +261,7 @@ func cleanToken(s string) string {
 }
 
 func saveToken(tok string) {
-	if err := mygo.Secrets.Service("gotion").Set(secretKey, []byte(tok)); err == nil {
+	if err := secrets.Set(secretKey, []byte(tok)); err == nil {
 		return
 	}
 	// No keychain (a Linux without a Secret Service): a file only the user reads.
@@ -258,7 +270,7 @@ func saveToken(tok string) {
 }
 
 func deleteToken() {
-	mygo.Secrets.Service("gotion").Delete(secretKey)
+	secrets.Delete(secretKey)
 	os.Remove(filepath.Join(configDir(), "token"))
 	os.Remove(filepath.Join(configDir(), "pages.json"))
 	os.RemoveAll(filepath.Join(configDir(), "cache"))
@@ -275,21 +287,7 @@ func (a *App) checkToken() {
 		a.tokenErr = "Token Notion biasanya diawali ntn_ (atau secret_ untuk yang lama). Cek lagi yang kamu salin."
 		return
 	}
-	a.checking, a.tokenErr = true, ""
-	client := notion.New(tok)
-	go func() {
-		me, err := client.Me(context.Background())
-		a.win.Update(func() {
-			a.checking = false
-			if err != nil {
-				a.tokenErr = "Token ditolak Notion: " + errText(err)
-				return
-			}
-			saveToken(tok)
-			a.client, a.bot, a.tokenInput = client, me, ""
-			a.refresh()
-		})
-	}()
+	a.signIn(creds{Access: tok})
 }
 
 func (a *App) signOut() {
@@ -336,7 +334,7 @@ func (a *App) refresh() {
 		if err == nil {
 			pages, err = client.Search(ctx)
 		}
-		a.win.Update(func() {
+		a.update(func() {
 			a.loading = false
 			if me != nil {
 				a.bot = me
@@ -609,7 +607,7 @@ func (a *App) followLink(i int) func(url string) {
 			return
 		}
 		kind, id, _ := strings.Cut(rest, "/")
-		a.win.Update(func() {
+		a.update(func() {
 			p := a.panels[i]
 			parent := ""
 			if p != nil {
@@ -657,7 +655,7 @@ func (a *App) openPage(p *panel, id string) {
 	shape := a.shape(p)
 	go func() {
 		s, text, extras, err := syncer.Open(context.Background(), client, bot, id, shape)
-		a.win.Update(func() {
+		a.update(func() {
 			if p.id != id || !a.has(p) {
 				if s != nil {
 					s.Close()
@@ -673,7 +671,7 @@ func (a *App) openPage(p *panel, id string) {
 			d.IdentifyParagraphs(doc.NewID)
 			s.OnStatus = func() { a.win.Invalidate() }
 			s.OnRemote = func(text richtext.Text, extras []doc.Extra) {
-				a.win.Update(func() {
+				a.update(func() {
 					if p.session == s {
 						d.SetText(text)
 						p.extras = extras
@@ -687,7 +685,7 @@ func (a *App) openPage(p *panel, id string) {
 					}
 				})
 			}
-			s.OnError = func(msg string) { a.win.Update(func() { a.toast(msg) }) }
+			s.OnError = func(msg string) { a.update(func() { a.toast(msg) }) }
 			p.session, p.doc, p.extras = s, d, extras
 			a.guardReadOnly(p)
 			p.restore = -1
@@ -727,7 +725,7 @@ func (a *App) sendTitle(p *panel) {
 	client, id, prop := a.client, p.id, p.session.Page.TitleProperty()
 	go func() {
 		if err := client.SetTitle(context.Background(), id, prop, title); err != nil {
-			a.win.Update(func() { a.toast("Judul gagal disimpan: " + errText(err)) })
+			a.update(func() { a.toast("Judul gagal disimpan: " + errText(err)) })
 		}
 	}()
 }
@@ -745,7 +743,7 @@ func (a *App) newPage(parent string) {
 	client := a.client
 	go func() {
 		p, err := client.CreatePage(context.Background(), parent, "")
-		a.win.Update(func() {
+		a.update(func() {
 			if err != nil {
 				a.toast("Gagal membuat halaman: " + errText(err))
 				return

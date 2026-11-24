@@ -254,6 +254,27 @@ func (a *App) onboarding(c *ui.Context) {
 				ui.Text(c, "Hubungkan ke Notion").FontSize(22).FontWeight(700)
 				ui.Text(c, "Setup sekali, sekitar 2 menit. Token disimpan di keychain sistem.").FontSize(14).TextColor(p.Muted)
 			})
+			if oauthURL() != "" {
+				ui.Column(c).Gap(10).Children(func() {
+					if a.oauth != nil {
+						ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+							ui.Spinner(c).Size(16, 16)
+							ui.Text(c, "Lanjutkan login di browser…").FontSize(14).TextColor(p.Muted).Grow(1)
+							if ui.Button(c, "Batal").Border(1, p.Faint.Alpha(0.5)).Clicked() {
+								a.cancelOAuth()
+							}
+						})
+					} else if ui.PrimaryButton(c, "Masuk dengan Notion").Padding(10, 16).Disabled(a.checking).Clicked() {
+						a.startOAuth()
+					}
+					ui.Text(c, "Pilih halaman yang boleh dibuka gotion di halaman Notion yang muncul.").FontSize(12).TextColor(p.Faint)
+				})
+				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+					ui.Box(c).Height(1).Grow(1).Background(p.Line)
+					ui.Text(c, "atau pakai token integrasi").FontSize(12).TextColor(p.Faint)
+					ui.Box(c).Height(1).Grow(1).Background(p.Line)
+				})
+			}
 			step("1", func() {
 				ui.Text(c, "Buat integrasi baru di Notion").FontSize(14)
 				if ui.Link(c, "Buka halaman integrasi ↗", "").FontWeight(500).Clicked() {
