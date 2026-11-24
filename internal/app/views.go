@@ -609,13 +609,22 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	}
 	// The text keeps a reading width, centered; the editor itself spans the
 	// panel so its scroll bar sits at the panel's edge.
-	pad := max(48, (pn.width-readWidth)/2)
-	if a.set.FullWidth {
-		pad = 56
+	//
+	// The width is known only after layout, so this frame uses the last
+	// one's: the panel's, else the last width of any page in this place.
+	width := pn.width
+	if width == 0 {
+		width = a.widths[i]
 	}
+	pad := padding(width, a.set.FullWidth)
 	col := ui.Column(c).Grow(1).MinHeight(0).Padding(24, 0, 0, 0).Gap(10)
 	if b := col.LayoutBounds(); b.W > 0 {
-		pn.width = b.W
+		pn.width, a.widths[i] = b.W, b.W
+		if padding(b.W, a.set.FullWidth) != pad {
+			// Drawn with a stale width: draw again now, not at the next
+			// mouse move.
+			c.After(0)
+		}
 	}
 	col.Children(func() {
 		ui.Row(c).PaddingX(pad).AlignItems(ui.Center).Gap(10).Children(func() {
@@ -666,7 +675,9 @@ func nonEmpty(s, alt string) string {
 // editor is the page's text, with the slash menu and the format bar over it.
 func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 	p := a.pal()
-	ui.Box(c).Grow(1).MinHeight(0).Children(func() {
+	// Clip: what the editor draws itself (tables, images) must not show
+	// over the title when scrolled up past it.
+	ui.Box(c).Grow(1).MinHeight(0).Clip().Children(func() {
 		e := richtext.Editor(c.Key("editor-"+pn.id), pn.doc, richtext.EditorOptions{
 			Theme:       &richtext.Theme{Padding: [2]float32{pad, 12}},
 			Label:       "Isi halaman",
@@ -690,4 +701,20 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 			a.formatBar(c, pn)
 		}
 	})
+}
+
+// minText is the narrowest the text of a page gets, however stale a width.
+const minText = 320
+
+// padding is the room left and right of a page's text in a panel width
+// wide: centered at the reading width, never squeezing the text.
+func padding(width float32, full bool) float32 {
+	pad := max(48, (width-readWidth)/2)
+	if full {
+		pad = 56
+	}
+	if width > 0 && width-2*pad < minText {
+		pad = max(16, (width-minText)/2)
+	}
+	return pad
 }

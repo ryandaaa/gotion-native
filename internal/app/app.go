@@ -82,6 +82,9 @@ type App struct {
 	switcher switcherState
 	toasts   []string
 	dark     bool
+
+	// widths are the last widths of the panels, for pages opened into them.
+	widths [2]float32
 }
 
 // New returns the app, signed in when a token is saved.
@@ -530,8 +533,26 @@ func (a *App) forward() {
 func (a *App) openBeside(n *node) {
 	if a.panels[1] == nil {
 		a.panels[1] = &panel{}
+		a.guessSplit()
 	}
 	a.open(n, 1)
+}
+
+// guessSplit sets the widths a new split leaves, so its first frame is
+// close to right.
+func (a *App) guessSplit() {
+	total := a.widths[0]
+	if total <= 0 {
+		return
+	}
+	first := a.set.SplitSize
+	if first < 300 || first > total-300 {
+		first = total / 2
+	}
+	a.widths[0], a.widths[1] = first, total-first
+	if a.panels[0] != nil {
+		a.panels[0].width = first
+	}
 }
 
 func (a *App) closeSecond() {
@@ -542,6 +563,10 @@ func (a *App) closeSecond() {
 		a.panels[1] = nil
 		a.focus = 0
 		a.set.Second = ""
+		a.widths[0] += a.widths[1]
+		if a.panels[0] != nil {
+			a.panels[0].width = a.widths[0]
+		}
 		a.saveSettings()
 	}
 }
