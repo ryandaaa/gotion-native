@@ -319,16 +319,26 @@ func (a *App) pagePanel(c *ui.Context) {
 		return
 	}
 	// The editor scrolls itself, so it fills the rest of the panel.
-	ui.Column(c).Grow(1).MinHeight(0).Padding(28, 56, 0, 56).Gap(18).MaxWidth(900).Children(func() {
-		ui.Text(c, title).FontSize(30).FontWeight(700).Selectable()
-		a.extrasView(c)
-		e := richtext.EditorBase(c.Key("editor-"+a.selected), a.doc, richtext.EditorOptions{
+	// The text keeps a reading width, centered; the editor itself spans the
+	// panel so its scroll bar sits at the panel's edge.
+	pad := max(56, (a.panelWidth-readWidth)/2)
+	col := ui.Column(c).Grow(1).MinHeight(0).Padding(28, 0, 0, 0).Gap(18)
+	if b := col.LayoutBounds(); b.W > 0 {
+		a.panelWidth = b.W
+	}
+	col.Children(func() {
+		ui.Column(c).PaddingX(pad).Gap(18).Children(func() {
+			ui.Text(c, title).FontSize(30).FontWeight(700).Selectable()
+			a.extrasView(c)
+		})
+		e := richtext.Editor(c.Key("editor-"+a.selected), a.doc, richtext.EditorOptions{
+			Theme:       &richtext.Theme{Padding: [2]float32{pad, 12}},
 			Label:       "Isi halaman",
 			Placeholder: "Mulai menulis…",
 			OnLink:      a.followLink,
 			Font:        ui.Font{Family: "Inter", Size: 15},
 			Space:       func(int) float32 { return 6 },
-		}).LineHeight(1.5).Grow(1).MinHeight(0).Padding(0, 0, 48, 0)
+		}).LineHeight(1.5).Grow(1).MinHeight(0).Background(p.Panel).Border(0, p.Panel).Radius(0)
 		if e.Changed() && a.session != nil {
 			a.session.Edited(a.doc.Text())
 		}
@@ -393,3 +403,6 @@ func nonEmpty(s, alt string) string {
 	}
 	return s
 }
+
+// readWidth is the width of the text of a page.
+const readWidth = 760

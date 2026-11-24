@@ -62,6 +62,9 @@ type App struct {
 	table *tableView
 
 	dark bool
+
+	// panelWidth is the page panel's width last frame.
+	panelWidth float32
 }
 
 // New returns the app, signed in when a token is saved.
