@@ -17,8 +17,9 @@ func (a *App) onboarding(c *ui.Context) {
 	p := a.pal()
 	step := func(n string, body func()) {
 		ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
-			ui.Text(c, n).FontSize(12).FontWeight(600).TextColor(p.Panel).Background(p.Text).
-				Size(24, 24).Radius(12).TextAlign(ui.Center).Center()
+			ui.Box(c).Size(24, 24).Shrink(0).Radius(12).Background(p.Text).Center().Children(func() {
+				ui.Text(c, n).FontSize(12).FontWeight(600).TextColor(p.Panel)
+			})
 			ui.Column(c).Grow(1).Gap(8).Children(body)
 		})
 	}

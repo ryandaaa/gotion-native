@@ -146,15 +146,31 @@ func configDir() string {
 
 func loadToken() string {
 	if t := os.Getenv("NOTION_TOKEN"); t != "" {
-		return t
+		return cleanToken(t)
 	}
 	if b, err := mygo.Secrets.Service("gotion").Get(secretKey); err == nil {
-		return string(b)
+		return cleanToken(string(b))
 	}
 	if b, err := os.ReadFile(filepath.Join(configDir(), "token")); err == nil {
-		return strings.TrimSpace(string(b))
+		return cleanToken(string(b))
 	}
 	return ""
+}
+
+// cleanToken drops what a paste can bring along with a token: spaces and
+// line breaks anywhere, invisible characters, quotes and a "Bearer " prefix.
+func cleanToken(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 7 && strings.EqualFold(s[:7], "bearer ") {
+		s = s[7:]
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if r > ' ' && r < 0x7f && r != '"' && r != '\'' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func saveToken(tok string) {
@@ -174,9 +190,13 @@ func deleteToken() {
 
 // checkToken signs in with the token typed in onboarding.
 func (a *App) checkToken() {
-	tok := strings.TrimSpace(a.tokenInput)
+	tok := cleanToken(a.tokenInput)
 	if tok == "" {
 		a.tokenErr = "Tempel token dulu."
+		return
+	}
+	if !strings.HasPrefix(tok, "ntn_") && !strings.HasPrefix(tok, "secret_") {
+		a.tokenErr = "Token Notion biasanya diawali ntn_ (atau secret_ untuk yang lama). Cek lagi yang kamu salin."
 		return
 	}
 	a.checking, a.tokenErr = true, ""
