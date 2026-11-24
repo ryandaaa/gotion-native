@@ -367,6 +367,8 @@ type Property struct {
 	Name    string   `json:"name"`
 	Type    string   `json:"type"`
 	Options []Option `json:"-"`
+	// Target is the data source a relation's pages come from.
+	Target string `json:"-"`
 }
 
 // Option is a choice of a select, status or multi-select.
@@ -388,6 +390,13 @@ func (p *Property) UnmarshalJSON(b []byte) error {
 	if raw, ok := m[p.Type]; ok && json.Unmarshal(raw, &choices) == nil {
 		p.Options = choices.Options
 	}
+	if p.Type == "relation" {
+		var rel struct {
+			DataSourceID string `json:"data_source_id"`
+		}
+		json.Unmarshal(m["relation"], &rel)
+		p.Target = rel.DataSourceID
+	}
 	return nil
 }
 
@@ -396,7 +405,8 @@ func (p *Property) UnmarshalJSON(b []byte) error {
 // elsewhere (relations, people, files).
 func (p Property) Editable() bool {
 	switch p.Type {
-	case "title", "rich_text", "number", "select", "status", "multi_select", "date", "checkbox", "url", "email", "phone_number":
+	case "title", "rich_text", "number", "select", "status", "multi_select", "date", "checkbox", "url", "email", "phone_number",
+		"people", "relation":
 		return true
 	}
 	return false

@@ -175,3 +175,55 @@ func TestFilterAndSortQuery(t *testing.T) {
 		t.Error("no filter editor")
 	}
 }
+
+func TestSchemaLinksTemplates(t *testing.T) {
+	a, tv, rec, _ := editApp(t)
+	col, _ := tv.column("Status")
+	a.changeSchema(tv, map[string]any{"Biaya": map[string]any{"number": map[string]any{}}}, "ok")
+	a.changeSchema(tv, map[string]any{"Status": map[string]any{"name": "Tahap"}}, "ok")
+	a.changeSchema(tv, map[string]any{"Selesai": nil}, "ok")
+	for _, want := range []string{
+		`PATCH /data_sources/ds1 {"properties":{"Biaya":{"number":{}}}}`,
+		`PATCH /data_sources/ds1 {"properties":{"Status":{"name":"Tahap"}}}`,
+		`PATCH /data_sources/ds1 {"properties":{"Selesai":null}}`,
+	} {
+		if !waitSent(rec, want) {
+			t.Errorf("missing %s in\n%s", want, rec.all())
+		}
+	}
+	// A new option keeps the others: Notion takes the whole list.
+	a.addOption(tv, tv.rows[0], col, "Ditunda")
+	if !waitSent(rec, `{"name":"Blocked"},{"name":"Ditunda"}]}}}}`) {
+		t.Errorf("option:\n%s", rec.all())
+	}
+	people := notion.Property{Name: "PIC", Type: "people"}
+	a.setLinks(tv, tv.rows[0], people, []notion.Linked{{ID: "u1", Name: "Ryan"}})
+	if !waitSent(rec, `{"properties":{"PIC":{"people":[{"id":"u1","object":"user"}]}}}`) {
+		t.Errorf("people:\n%s", rec.all())
+	}
+	if got := notion.FormatProperty(tv.rows[0].Properties["PIC"]); got != "Ryan" {
+		t.Errorf("shown %q", got)
+	}
+	rel := notion.Property{Name: "Proyek", Type: "relation", Target: "ds2"}
+	a.setLinks(tv, tv.rows[0], rel, []notion.Linked{{ID: "pg9", Name: "Gotion"}})
+	if !waitSent(rec, `{"properties":{"Proyek":{"relation":[{"id":"pg9"}]}}}`) {
+		t.Errorf("relation:\n%s", rec.all())
+	}
+	tv.templates = []notion.Template{{ID: "tpl1", Name: "Rapat"}}
+	tv.adding = newRow{open: true, title: "Rapat Senin", template: "Rapat"}
+	a.createRow(0, tv)
+	if !waitSent(rec, `"template":{"template_id":"tpl1","type":"template_id"}`) {
+		t.Errorf("template:\n%s", rec.all())
+	}
+}
+
+func TestAddColumnShot(t *testing.T) {
+	_, tv, _, tester := editApp(t)
+	tv.schema.adding, tv.schema.newType = true, "rich_text"
+	tester.Frame()
+	tester.Advance(time.Second)
+	snapshot(t, tester, "db-add-column")
+	if _, ok := tester.Find("Tambah kolom"); !ok {
+		t.Error("no add column popover")
+	}
+}

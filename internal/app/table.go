@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -14,16 +15,20 @@ import (
 
 // tableView is a data source shown read-only, as a table or as cards.
 type tableView struct {
-	id      string
-	dsID    string // the data source, where new rows go
-	title   string
-	edit    cellEdit
-	adding  newRow
-	query   tableQuery
-	columns []notion.Property
-	rows    []*notion.Page
-	loading bool
-	err     string
+	id             string
+	dsID           string // the data source, where new rows go
+	title          string
+	edit           cellEdit
+	adding         newRow
+	query          tableQuery
+	related        map[string][]notion.Linked // the pages of relations' data sources
+	schema         schemaEdit
+	templates      []notion.Template
+	templatesAsked bool
+	columns        []notion.Property
+	rows           []*notion.Page
+	loading        bool
+	err            string
 }
 
 func (a *App) openTable(pn *panel, n *node) {
@@ -116,6 +121,20 @@ func (a *App) value(c *ui.Context, raw []byte, typ string) {
 		return
 	}
 	text := notion.FormatProperty(raw)
+	if typ == "relation" {
+		// Notion gives a relation's pages by ID: name those the app knows.
+		var names []string
+		for _, l := range notion.Links(raw) {
+			if n := a.nodes[l.ID]; n != nil {
+				names = append(names, n.Title)
+			} else if l.Name != "" {
+				names = append(names, l.Name)
+			}
+		}
+		if len(names) > 0 {
+			text = strings.Join(names, ", ")
+		}
+	}
 	switch typ {
 	case "checkbox":
 		box := ui.Box(c).Size(16, 16).Radius(4).Center()
@@ -237,6 +256,7 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 	for _, col := range t.columns {
 		total += colWidth(col)
 	}
+	total += 44 // the + that adds a column
 	cellOf := func(key string, col notion.Property, last bool) ui.Element {
 		e := ui.Row(c.Key(key)).Width(colWidth(col)).Shrink(0).Height(38).AlignItems(ui.Center).Padding(0, 10).Clip()
 		if !last {
@@ -244,19 +264,14 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 		}
 		return e
 	}
-	cell := func(col notion.Property, last bool, body func()) {
-		cellOf("h"+col.Name, col, last).Children(body)
-	}
 	ui.ScrollBoth(c).Grow(1).MinHeight(0).Margin(12, 24, 16, 24).Children(func() {
 		ui.Column(c).Width(total).Border(1, p.Line).Radius(8).Clip().Children(func() {
 			// The header stays at the top as the rows scroll.
 			ui.Row(c).Sticky().Top(0).ZIndex(2).Background(p.Sidebar).BorderWidth(0, 0, 1, 0).BorderColor(p.Line).Children(func() {
-				for j, col := range t.columns {
-					cell(col, j == len(t.columns)-1, func() {
-						ui.Icon(c, propIcon(col.Type)).Size(13, 13).TextColor(p.Faint)
-						ui.Text(c, col.Name).FontSize(13).FontWeight(500).TextColor(p.Muted).SingleLine().MinWidth(0).MarginStart(6)
-					})
+				for _, col := range t.columns {
+					a.headerCell(c, t, col, cellOf("h"+col.Name, col, false))
 				}
+				a.addColumn(c, t)
 			})
 			for k, r := range t.rows {
 				row := ui.Row(c.Key("row"+r.ID)).BorderWidth(0, 0, 1, 0).BorderColor(p.Line)

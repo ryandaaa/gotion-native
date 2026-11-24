@@ -204,3 +204,60 @@ func (c *Client) CreateDatabase(ctx context.Context, parent, title string) (*Dat
 	var d Database
 	return &d, c.Do(ctx, "POST", "/databases", body, &d)
 }
+
+// UpdateSchema changes the columns of a data source: props maps a column's
+// name to its new settings ({"number": {}}), to {"name": "New"} to rename
+// it, or to nil to delete it. It returns the data source after.
+func (c *Client) UpdateSchema(ctx context.Context, id string, props map[string]any) (*DataSource, error) {
+	var d DataSource
+	return &d, c.Do(ctx, "PATCH", "/data_sources/"+id, map[string]any{"properties": props}, &d)
+}
+
+// ColumnTypes are the kinds of column the app adds, Notion's names and the
+// app's, in the order it offers them.
+var ColumnTypes = []struct{ Type, Label string }{
+	{"rich_text", "Teks"}, {"number", "Angka"}, {"select", "Pilihan"}, {"multi_select", "Banyak pilihan"},
+	{"date", "Tanggal"}, {"checkbox", "Centang"}, {"url", "Tautan"}, {"email", "Email"}, {"phone_number", "Telepon"},
+	{"people", "Orang"}, {"files", "File"},
+}
+
+// AddOption is the schema change that adds an option to a select, status
+// or multi-select: Notion takes the options as the whole list to keep.
+func AddOption(p Property, name string) map[string]any {
+	var opts []any
+	for _, o := range p.Options {
+		opts = append(opts, map[string]any{"name": o.Name})
+	}
+	opts = append(opts, map[string]any{"name": name})
+	return map[string]any{p.Name: map[string]any{p.Type: map[string]any{"options": opts}}}
+}
+
+// Templates returns the page templates of a data source.
+func (c *Client) Templates(ctx context.Context, id string) ([]Template, error) {
+	var out struct {
+		Templates []Template `json:"templates"`
+	}
+	err := c.Do(ctx, "GET", "/data_sources/"+id+"/templates?page_size=100", nil, &out)
+	return out.Templates, err
+}
+
+// Template is a page template of a data source.
+type Template struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	IsDefault bool   `json:"is_default"`
+}
+
+// CreateRowFrom makes a row from a template (template "" for none): Notion
+// fills its content in after it answers.
+func (c *Client) CreateRowFrom(ctx context.Context, dataSource, prop, title, template string) (*Page, error) {
+	body := map[string]any{
+		"parent":     map[string]any{"type": "data_source_id", "data_source_id": dataSource},
+		"properties": map[string]any{prop: titleValue(title)},
+	}
+	if template != "" {
+		body["template"] = map[string]any{"type": "template_id", "template_id": template}
+	}
+	var p Page
+	return &p, c.Do(ctx, "POST", "/pages", body, &p)
+}

@@ -80,3 +80,40 @@ func Value(p Property, text string, on bool, names []string) (send any, show jso
 	show, err = json.Marshal(shown)
 	return send, show, err
 }
+
+// Linked is a person or a page a people or relation property points at.
+type Linked struct {
+	ID, Name string
+}
+
+// LinksValue builds a people or relation property's new value: the people
+// or pages it points at, as Notion takes them and as it would return them.
+func LinksValue(p Property, links []Linked) (send any, show json.RawMessage, err error) {
+	items := []any{}
+	shown := []any{}
+	for _, l := range links {
+		switch p.Type {
+		case "people":
+			items = append(items, map[string]any{"object": "user", "id": l.ID})
+			shown = append(shown, map[string]any{"object": "user", "id": l.ID, "name": l.Name})
+		case "relation":
+			items = append(items, map[string]any{"id": l.ID})
+			shown = append(shown, map[string]any{"id": l.ID, "name": l.Name})
+		default:
+			return nil, nil, fmt.Errorf("properti %s tidak menunjuk orang atau halaman", p.Type)
+		}
+	}
+	send = map[string]any{p.Type: items}
+	show, err = json.Marshal(map[string]any{"type": p.Type, "id": p.ID, p.Type: shown})
+	return send, show, err
+}
+
+// Links reads the people or pages of a people or relation property.
+func Links(raw json.RawMessage) []Linked {
+	var v struct {
+		People   []Linked `json:"people"`
+		Relation []Linked `json:"relation"`
+	}
+	json.Unmarshal(raw, &v)
+	return append(v.People, v.Relation...)
+}

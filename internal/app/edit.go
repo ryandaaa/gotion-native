@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -20,9 +21,10 @@ type cellEdit struct {
 
 // newRow is the title of a row being added, under the table.
 type newRow struct {
-	open  bool
-	title string
-	busy  bool
+	open     bool
+	title    string
+	busy     bool
+	template string // the chosen template's name, "" for none
 }
 
 // setCell gives a row's property a new value: shown at once, sent to
@@ -110,7 +112,7 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 				chosen[n] = true
 			}
 			if len(col.Options) == 0 {
-				ui.Text(c, "Belum ada pilihan. Tambahkan pilihan di Notion.").FontSize(13).TextColor(p.Faint).Padding(4)
+				ui.Text(c, "Belum ada pilihan. Tambahkan di bawah.").FontSize(13).TextColor(p.Faint).Padding(4)
 			}
 			ui.Scroll(c).MaxHeight(300).Children(func() {
 				ui.Column(c).Gap(1).Children(func() {
@@ -147,6 +149,14 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 					}
 				})
 			})
+			// A new option: added to the column, then chosen.
+			if col.Type != "status" {
+				in := ui.TextInput(c, &e.text).Placeholder("Pilihan baru…").Label("Pilihan baru").FontSize(13)
+				if in.Submitted() && strings.TrimSpace(e.text) != "" {
+					a.addOption(t, r, col, strings.TrimSpace(e.text))
+					e.text = ""
+				}
+			}
 			if len(chosen) > 0 {
 				clear := ui.Text(c.Key("clear"), "Kosongkan").FontSize(13).TextColor(p.Muted).Padding(6).Radius(6).Cursor(ui.CursorPointer)
 				if clear.Hovered() {
@@ -157,6 +167,8 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 					e.open = false
 				}
 			}
+		case "people", "relation":
+			a.linksEditor(c, t, r, col)
 		default:
 			hint := map[string]string{"date": "TTTT-BB-HH", "number": "Angka", "url": "https://", "email": "nama@contoh.com", "phone_number": "+62…"}[col.Type]
 			in := ui.TextInput(c, &e.text).Placeholder(hint).AutoFocus().Label(col.Name)
@@ -196,6 +208,7 @@ func (a *App) addRow(c *ui.Context, i int, t *tableView) {
 		})
 		if b.Clicked() {
 			*n = newRow{open: true}
+			a.loadTemplates(t)
 		}
 		return
 	}
@@ -203,6 +216,19 @@ func (a *App) addRow(c *ui.Context, i int, t *tableView) {
 		in := ui.TextInput(c, &n.title).Placeholder("Judul baris baru").AutoFocus().Grow(1).Label("Judul").Disabled(n.busy)
 		if in.Submitted() && !n.busy {
 			a.createRow(i, t)
+		}
+		if len(t.templates) > 0 && !n.busy {
+			names := []string{"Tanpa template"}
+			for _, tp := range t.templates {
+				names = append(names, nonEmpty(tp.Name, "Template"))
+			}
+			choice := nonEmpty(n.template, "Tanpa template")
+			if ui.Select(c, &choice, names).Width(180).Label("Template").Changed() {
+				n.template = choice
+				if choice == "Tanpa template" {
+					n.template = ""
+				}
+			}
 		}
 		if n.busy {
 			ui.Spinner(c).Size(14, 14)
@@ -222,8 +248,14 @@ func (a *App) createRow(i int, t *tableView) {
 	}
 	t.adding.busy = true
 	client, ds := a.client, t.dsID
+	template := ""
+	for _, tp := range t.templates {
+		if tp.Name == t.adding.template && t.adding.template != "" {
+			template = tp.ID
+		}
+	}
 	go func() {
-		r, err := client.CreateRow(context.Background(), ds, prop, title)
+		r, err := client.CreateRowFrom(context.Background(), ds, prop, title, template)
 		a.update(func() {
 			t.adding = newRow{}
 			if err != nil {
@@ -232,6 +264,198 @@ func (a *App) createRow(i int, t *tableView) {
 			}
 			t.rows = append(t.rows, r)
 			a.toast("Baris ditambahkan")
+		})
+	}()
+}
+
+// addOption adds an option to a column (Notion takes the whole list) and
+// gives the row it.
+func (a *App) addOption(t *tableView, r *notion.Page, col notion.Property, name string) {
+	client := a.client
+	go func() {
+		ds, err := client.UpdateSchema(context.Background(), t.dsID, notion.AddOption(col, name))
+		a.update(func() {
+			if err != nil {
+				a.toast("Gagal menambah pilihan: " + errText(err))
+				return
+			}
+			a.applySchema(t, ds)
+			if nc, ok := t.column(col.Name); ok {
+				names := []string{name}
+				if col.Type == "multi_select" {
+					names = append(chipNames(r.Properties[col.Name]), name)
+				}
+				a.setCell(t, r, nc, "", false, names)
+			}
+		})
+	}()
+}
+
+// applySchema takes a data source's columns as Notion now has them,
+// keeping the table's order: the title first, then by name.
+func (a *App) applySchema(t *tableView, ds *notion.DataSource) {
+	if ds == nil || len(ds.Properties) == 0 {
+		return
+	}
+	var cols []notion.Property
+	for name, p := range ds.Properties {
+		if p.Name == "" {
+			p.Name = name // the map's key is the column's name
+		}
+		if p.Type == "" {
+			continue // not a column: an answer of another shape
+		}
+		cols = append(cols, p)
+	}
+	if len(cols) == 0 {
+		return
+	}
+	sort.Slice(cols, func(i, j int) bool {
+		if (cols[i].Type == "title") != (cols[j].Type == "title") {
+			return cols[i].Type == "title"
+		}
+		return cols[i].Name < cols[j].Name
+	})
+	t.columns = cols
+}
+
+// setLinks points a people or relation property at links: shown at once,
+// sent behind, put back if Notion refuses.
+func (a *App) setLinks(t *tableView, r *notion.Page, col notion.Property, links []notion.Linked) {
+	send, show, err := notion.LinksValue(col, links)
+	if err != nil {
+		a.toast(err.Error())
+		return
+	}
+	old := r.Properties[col.Name]
+	r.Properties[col.Name] = show
+	client := a.client
+	go func() {
+		_, err := client.SetProperties(context.Background(), r.ID, map[string]any{col.Name: send})
+		if err != nil {
+			a.update(func() {
+				r.Properties[col.Name] = old
+				a.toast("Gagal menyimpan " + col.Name + ": " + errText(err))
+			})
+		}
+	}()
+}
+
+// linksEditor picks the people or the pages a property points at: the
+// workspace's members, or the pages of the relation's data source.
+func (a *App) linksEditor(c *ui.Context, t *tableView, r *notion.Page, col notion.Property) {
+	p := a.pal()
+	e := &t.edit
+	current := notion.Links(r.Properties[col.Name])
+	has := map[string]bool{}
+	for _, l := range current {
+		has[l.ID] = true
+	}
+	var choices []notion.Linked
+	if col.Type == "people" {
+		if !a.settings.membersLoaded && !a.settings.membersLoading {
+			a.loadMembers()
+		}
+		for _, u := range a.settings.members {
+			choices = append(choices, notion.Linked{ID: u.ID, Name: nonEmpty(u.Name, "Tanpa nama")})
+		}
+		if a.settings.membersErr != "" {
+			ui.Text(c, a.settings.membersErr).FontSize(12).TextColor(p.Faint).Padding(4)
+		}
+	} else {
+		choices = a.relationChoices(t, col)
+	}
+	ui.TextInput(c, &e.text).Placeholder("Cari…").AutoFocus().Label("Cari").FontSize(13)
+	q := strings.ToLower(strings.TrimSpace(e.text))
+	ui.Scroll(c).MaxHeight(280).Children(func() {
+		ui.Column(c).Gap(1).Children(func() {
+			shown := 0
+			for _, ch := range choices {
+				if q != "" && !strings.Contains(strings.ToLower(ch.Name), q) || shown >= 40 {
+					continue
+				}
+				shown++
+				row := ui.Row(c.Key("ln"+ch.ID)).AlignItems(ui.Center).Gap(8).Padding(6, 8).Radius(6).Cursor(ui.CursorPointer)
+				if row.Hovered() {
+					row.Background(p.Hover)
+				}
+				row.Children(func() {
+					ui.Text(c, ch.Name).FontSize(13).Grow(1).SingleLine().MinWidth(0)
+					if has[ch.ID] {
+						ui.Icon(c, iconCheck).Size(14, 14).TextColor(p.Accent)
+					}
+				})
+				if row.Clicked() {
+					var next []notion.Linked
+					for _, l := range current {
+						if l.ID != ch.ID {
+							next = append(next, l)
+						}
+					}
+					if !has[ch.ID] {
+						next = append(next, ch)
+					}
+					a.setLinks(t, r, col, next)
+				}
+			}
+			if len(choices) == 0 {
+				ui.Text(c, "Memuat…").FontSize(12).TextColor(p.Faint).Padding(6)
+			}
+		})
+	})
+}
+
+// relationChoices are the pages of a relation's data source, fetched once
+// per table.
+func (a *App) relationChoices(t *tableView, col notion.Property) []notion.Linked {
+	if t.related == nil {
+		t.related = map[string][]notion.Linked{}
+	}
+	if got, ok := t.related[col.Target]; ok {
+		return got
+	}
+	if col.Target == "" {
+		return nil
+	}
+	t.related[col.Target] = nil // asked
+	client := a.client
+	go func() {
+		pages, err := client.QueryWith(context.Background(), col.Target, nil, nil, 200)
+		a.update(func() {
+			if err != nil {
+				a.toast("Gagal memuat halaman relasi: " + errText(err))
+				return
+			}
+			var out []notion.Linked
+			for _, pg := range pages {
+				out = append(out, notion.Linked{ID: pg.ID, Name: nonEmpty(pg.Title(), "Tanpa judul")})
+			}
+			t.related[col.Target] = out
+		})
+	}()
+	return nil
+}
+
+// loadTemplates fetches a table's page templates, once, to offer them for
+// new rows; the default one starts chosen.
+func (a *App) loadTemplates(t *tableView) {
+	if t.templatesAsked || t.dsID == "" {
+		return
+	}
+	t.templatesAsked = true
+	client := a.client
+	go func() {
+		list, err := client.Templates(context.Background(), t.dsID)
+		if err != nil {
+			return // offered none
+		}
+		a.update(func() {
+			t.templates = list
+			for _, tp := range list {
+				if tp.IsDefault && t.adding.template == "" {
+					t.adding.template = tp.Name
+				}
+			}
 		})
 	}()
 }

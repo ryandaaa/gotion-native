@@ -26,8 +26,14 @@ func FormatProperty(raw json.RawMessage) string {
 		Email       *string `json:"email"`
 		PhoneNumber *string `json:"phone_number"`
 		People      []User  `json:"people"`
-		Relation    []any   `json:"relation"`
-		Formula     *struct {
+		Relation    []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"relation"`
+		Files []struct {
+			Name string `json:"name"`
+		} `json:"files"`
+		Formula *struct {
 			Type    string   `json:"type"`
 			String  *string  `json:"string"`
 			Number  *float64 `json:"number"`
@@ -104,7 +110,22 @@ func FormatProperty(raw json.RawMessage) string {
 		if len(v.Relation) == 0 {
 			return ""
 		}
-		return fmt.Sprintf("%d tautan", len(v.Relation))
+		var names []string
+		for _, r := range v.Relation {
+			if r.Name != "" {
+				names = append(names, r.Name)
+			}
+		}
+		if len(names) == len(v.Relation) {
+			return strings.Join(names, ", ")
+		}
+		return fmt.Sprintf("%d halaman", len(v.Relation))
+	case "files":
+		var names []string
+		for _, f := range v.Files {
+			names = append(names, f.Name)
+		}
+		return strings.Join(names, ", ")
 	case "formula":
 		if f := v.Formula; f != nil {
 			switch {
