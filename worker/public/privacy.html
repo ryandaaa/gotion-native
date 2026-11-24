@@ -1,66 +1,140 @@
 <!doctype html>
-<html lang="id">
+<html lang="en" data-lang="en" data-title-en="Privacy Policy · gotion" data-title-id="Kebijakan Privasi · gotion">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kebijakan Privasi — gotion</title>
-<meta name="description" content="Data apa yang dipakai gotion, di mana disimpan, dan siapa saja yang menerimanya.">
+<script>
+  (function () {
+    var l;
+    try { l = localStorage.getItem("lang"); } catch (e) {}
+    if (l !== "id" && l !== "en") l = /^(id|in)\b/i.test(navigator.language || "") ? "id" : "en";
+    document.documentElement.dataset.lang = l;
+    document.documentElement.lang = l;
+  })();
+</script>
+<title>Privacy Policy · gotion</title>
+<meta name="description" content="What data gotion uses, where it is kept, and who receives it.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
+<script src="/site.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav>
-    <a class="brand" href="/"><img src="/favicon.svg" alt="">gotion</a>
-    <div class="links"><a href="/">Beranda</a><a href="/terms">Ketentuan</a></div>
-  </nav>
-  <article class="doc">
-    <h1>Kebijakan Privasi</h1>
-    <div class="updated">Terakhir diperbarui 24 November 2026</div>
+  <header class="top">
+    <a class="brand" href="/"><img src="/favicon.svg" width="28" height="28" alt="">gotion</a>
+    <nav aria-label="Main">
+      <a href="/"><span lang="en">Home</span><span lang="id">Beranda</span></a>
+      <a href="/terms"><span lang="en">Terms</span><span lang="id">Ketentuan</span></a>
+      <button class="lang" type="button" data-lang-switch aria-label="Bahasa Indonesia / English">
+        <span lang="en">Bahasa Indonesia</span><span lang="id">English</span>
+      </button>
+    </nav>
+  </header>
+  <main>
+    <article class="doc" lang="en">
+      <h1>Privacy Policy</h1>
+      <div class="updated">Last updated 24 November 2026</div>
+      <p>gotion is a desktop app for opening and editing Notion pages. This page explains what data gotion uses, where it is, and who receives it. In short: your notes stay in Notion and on your own computer, and we do not store them.</p>
 
-    <p>gotion adalah aplikasi desktop untuk membuka dan mengedit halaman Notion. Halaman ini menjelaskan data apa yang dipakai gotion, di mana data itu berada, dan siapa saja yang menerimanya. Singkatnya: catatanmu tetap di Notion dan di komputermu sendiri, dan kami tidak menyimpannya.</p>
+      <h2>What gotion reads and changes</h2>
+      <p>gotion can only open the pages and databases you allowed when signing in with Notion (or connected to your own integration). The app reads and changes them directly from your computer to Notion, through Notion's official API. The content of your pages never passes through our server.</p>
 
-    <h2>Yang dibaca dan diubah gotion</h2>
-    <p>gotion hanya bisa membuka halaman dan database yang kamu izinkan saat masuk dengan Notion (atau yang kamu hubungkan ke integrasimu). Aplikasi membaca dan mengubah halaman itu langsung dari komputermu ke Notion, lewat API resmi Notion. Isi halamanmu tidak melewati server kami.</p>
+      <h2>What is kept on your computer</h2>
+      <ul>
+        <li><strong>Your Notion access token</strong>, in the operating system's secret store (Keychain on macOS, Secret Service on Linux, Credential Manager on Windows).</li>
+        <li><strong>Copies of pages you opened</strong> and edits not sent yet, so pages open quickly and can be edited offline.</li>
+        <li><strong>The app's settings</strong>, such as the language, theme, zoom and the last pages open.</li>
+      </ul>
+      <p>All of it is in gotion's folder on your computer, and is removed when you sign out in the app or delete that folder.</p>
 
-    <h2>Yang disimpan di komputermu</h2>
-    <ul>
-      <li><strong>Token akses Notion</strong>, di penyimpanan rahasia sistem operasi (Keychain di macOS, Secret Service di Linux, Credential Manager di Windows).</li>
-      <li><strong>Salinan halaman yang pernah dibuka</strong> dan edit yang belum terkirim, supaya halaman terbuka cepat dan tetap bisa diedit saat offline.</li>
-      <li><strong>Pengaturan aplikasi</strong>, seperti tema, zoom, dan halaman terakhir yang dibuka.</li>
-    </ul>
-    <p>Semua itu ada di folder konfigurasi gotion di komputermu, dan terhapus saat kamu keluar dari akun di aplikasi atau menghapus folder tersebut.</p>
+      <h2>Our server</h2>
+      <p>Our server at <code>gotion.ryanda.my.id</code> runs on Cloudflare Workers and does three things:</p>
+      <ul>
+        <li><strong>Sign-in.</strong> Notion requires a server to exchange the sign-in code. Ours receives the code from Notion, exchanges it for tokens, and hands them straight to the app on your computer. It also renews expired tokens. It does not keep the tokens or the code.</li>
+        <li><strong>Change notices.</strong> When a page shared with gotion changes, Notion sends our server a notice: the kind of change, the workspace, page and author IDs, and the time. Never the page's title or content. Each workspace's last 100 notices are kept for up to 2 days, so the app can refresh what changed. To give a workspace's notices only to that workspace's app, the server checks the app's token with Notion and keeps a one-way hash of it, linked to the workspace ID, for 10 minutes.</li>
+        <li><strong>Downloads.</strong> The download links on this website lead to the release files on GitHub.</li>
+      </ul>
+      <p>Like every Cloudflare service, Cloudflare may log technical data of requests (such as the IP address and time) under its own privacy policy.</p>
 
-    <h2>Server login</h2>
-    <p>Notion mewajibkan pertukaran kode login dilakukan oleh server. Server kami di <code>gotion.ryanda.my.id</code> (Cloudflare Workers) menerima kode dari Notion, menukarnya menjadi token, lalu langsung meneruskan token itu ke aplikasi di komputermu. Server juga dipakai untuk memperbarui token yang kedaluwarsa. Server tidak menyimpan token, kode, atau isi halamanmu. Seperti semua layanan Cloudflare, Cloudflare dapat mencatat data teknis permintaan (misalnya alamat IP dan waktu) sesuai kebijakan privasinya.</p>
+      <h2>Other services the app contacts</h2>
+      <ul>
+        <li><strong>Notion</strong> (api.notion.com), to read and save your pages. See Notion's privacy policy.</li>
+        <li><strong>GitHub</strong>, to check for and download new versions of gotion. The app asks for the update file of your system's type; like any download, GitHub sees your IP address.</li>
+        <li><strong>jsDelivr</strong>, to download emoji pictures (Twemoji) once and keep them on your computer. Only the emoji's code is sent, not your page.</li>
+        <li><strong>The addresses of images in your pages</strong>, fetched from their source to show them.</li>
+      </ul>
 
-    <h2>Pihak lain yang dihubungi aplikasi</h2>
-    <ul>
-      <li><strong>Notion</strong> (api.notion.com), untuk membaca dan menyimpan halamanmu. Lihat kebijakan privasi Notion.</li>
-      <li><strong>jsDelivr</strong>, untuk mengunduh gambar emoji (Twemoji) sekali lalu menyimpannya di komputermu. Yang dikirim hanya kode emoji, bukan isi halaman.</li>
-      <li><strong>Alamat gambar di halamanmu</strong>, yang diunduh langsung dari sumbernya agar bisa ditampilkan.</li>
-    </ul>
+      <h2>What we do not do</h2>
+      <ul>
+        <li>No analytics, tracking or telemetry, in the app or on this website.</li>
+        <li>We do not sell or share your data, or use it for ads.</li>
+        <li>We do not store the content of your Notion pages on any server.</li>
+      </ul>
 
-    <h2>Yang tidak kami lakukan</h2>
-    <ul>
-      <li>Tidak ada analitik, pelacakan, atau telemetri, baik di aplikasi maupun di situs ini.</li>
-      <li>Tidak menjual, membagikan, atau memakai datamu untuk iklan.</li>
-      <li>Tidak menyimpan isi halaman Notion-mu di server.</li>
-    </ul>
+      <h2>Taking access back</h2>
+      <p>You can take gotion's access back at any time in Notion (Settings → Connections), and sign out in the app to delete the saved token.</p>
 
-    <h2>Mencabut akses</h2>
-    <p>Kamu bisa mencabut akses gotion kapan saja dari pengaturan Notion (Settings → Connections), dan keluar dari akun di aplikasi untuk menghapus token yang tersimpan.</p>
+      <h2>Changes</h2>
+      <p>If this policy changes, the new version is put on this page with a new date.</p>
 
-    <h2>Perubahan</h2>
-    <p>Jika kebijakan ini berubah, versi terbaru akan dipasang di halaman ini dengan tanggal pembaruan yang baru.</p>
+      <h2>Contact</h2>
+      <p>Questions about privacy, or requests about your data: <a href="mailto:anakriryanda@gmail.com">anakriryanda@gmail.com</a>.</p>
+    </article>
 
-    <h2>Kontak</h2>
-    <p>Pertanyaan soal privasi atau permintaan terkait datamu: <a href="mailto:anakriryanda@gmail.com">anakriryanda@gmail.com</a>.</p>
-  </article>
+    <article class="doc" lang="id">
+      <h1>Kebijakan Privasi</h1>
+      <div class="updated">Terakhir diperbarui 24 November 2026</div>
+      <p>gotion adalah aplikasi desktop untuk membuka dan mengedit halaman Notion. Halaman ini menjelaskan data apa yang dipakai gotion, di mana data itu berada, dan siapa saja yang menerimanya. Singkatnya: catatanmu tetap di Notion dan di komputermu sendiri, dan kami tidak menyimpannya.</p>
+
+      <h2>Yang dibaca dan diubah gotion</h2>
+      <p>gotion hanya bisa membuka halaman dan database yang kamu izinkan saat masuk dengan Notion (atau yang kamu hubungkan ke integrasimu). Aplikasi membaca dan mengubahnya langsung dari komputermu ke Notion, lewat API resmi Notion. Isi halamanmu tidak pernah melewati server kami.</p>
+
+      <h2>Yang disimpan di komputermu</h2>
+      <ul>
+        <li><strong>Token akses Notion</strong>, di penyimpanan rahasia sistem operasi (Keychain di macOS, Secret Service di Linux, Credential Manager di Windows).</li>
+        <li><strong>Salinan halaman yang pernah dibuka</strong> dan edit yang belum terkirim, supaya halaman terbuka cepat dan tetap bisa diedit saat offline.</li>
+        <li><strong>Pengaturan aplikasi</strong>, seperti bahasa, tema, zoom, dan halaman terakhir yang dibuka.</li>
+      </ul>
+      <p>Semua itu ada di folder gotion di komputermu, dan terhapus saat kamu keluar dari akun di aplikasi atau menghapus folder tersebut.</p>
+
+      <h2>Server kami</h2>
+      <p>Server kami di <code>gotion.ryanda.my.id</code> berjalan di Cloudflare Workers dan melakukan tiga hal:</p>
+      <ul>
+        <li><strong>Proses masuk.</strong> Notion mewajibkan pertukaran kode login dilakukan oleh server. Server kami menerima kode dari Notion, menukarnya menjadi token, lalu langsung meneruskannya ke aplikasi di komputermu. Server juga memperbarui token yang kedaluwarsa. Token dan kode tidak disimpan.</li>
+        <li><strong>Pemberitahuan perubahan.</strong> Saat halaman yang dibagikan ke gotion berubah, Notion mengirim pemberitahuan ke server kami: jenis perubahan, ID workspace, halaman dan penulis, serta waktunya. Tidak pernah judul atau isi halaman. 100 pemberitahuan terakhir tiap workspace disimpan paling lama 2 hari, supaya aplikasi bisa memuat ulang yang berubah. Agar pemberitahuan sebuah workspace hanya diberikan ke aplikasi workspace itu, server memeriksa token aplikasi ke Notion dan menyimpan hash satu arahnya, terhubung dengan ID workspace, selama 10 menit.</li>
+        <li><strong>Unduhan.</strong> Tautan unduhan di situs ini mengarah ke file rilis di GitHub.</li>
+      </ul>
+      <p>Seperti semua layanan Cloudflare, Cloudflare dapat mencatat data teknis permintaan (misalnya alamat IP dan waktu) sesuai kebijakan privasinya.</p>
+
+      <h2>Layanan lain yang dihubungi aplikasi</h2>
+      <ul>
+        <li><strong>Notion</strong> (api.notion.com), untuk membaca dan menyimpan halamanmu. Lihat kebijakan privasi Notion.</li>
+        <li><strong>GitHub</strong>, untuk memeriksa dan mengunduh versi baru gotion. Aplikasi meminta file pembaruan untuk jenis sistemmu; seperti unduhan lain, GitHub melihat alamat IP-mu.</li>
+        <li><strong>jsDelivr</strong>, untuk mengunduh gambar emoji (Twemoji) sekali lalu menyimpannya di komputermu. Yang dikirim hanya kode emoji, bukan isi halaman.</li>
+        <li><strong>Alamat gambar di halamanmu</strong>, yang diunduh langsung dari sumbernya agar bisa ditampilkan.</li>
+      </ul>
+
+      <h2>Yang tidak kami lakukan</h2>
+      <ul>
+        <li>Tidak ada analitik, pelacakan, atau telemetri, baik di aplikasi maupun di situs ini.</li>
+        <li>Tidak menjual, membagikan, atau memakai datamu untuk iklan.</li>
+        <li>Tidak menyimpan isi halaman Notion-mu di server mana pun.</li>
+      </ul>
+
+      <h2>Mencabut akses</h2>
+      <p>Kamu bisa mencabut akses gotion kapan saja dari pengaturan Notion (Settings → Connections), dan keluar dari akun di aplikasi untuk menghapus token yang tersimpan.</p>
+
+      <h2>Perubahan</h2>
+      <p>Jika kebijakan ini berubah, versi terbaru akan dipasang di halaman ini dengan tanggal pembaruan yang baru.</p>
+
+      <h2>Kontak</h2>
+      <p>Pertanyaan soal privasi atau permintaan terkait datamu: <a href="mailto:anakriryanda@gmail.com">anakriryanda@gmail.com</a>.</p>
+    </article>
+  </main>
   <footer>
     <span>© 2026 gotion</span>
-    <a href="/">Beranda</a>
-    <a href="/terms">Ketentuan</a>
+    <a href="/"><span lang="en">Home</span><span lang="id">Beranda</span></a>
+    <a href="/terms"><span lang="en">Terms</span><span lang="id">Ketentuan</span></a>
   </footer>
 </div>
 </body>

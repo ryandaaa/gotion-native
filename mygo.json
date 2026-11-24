@@ -2,5 +2,11 @@
   "name": "gotion",
   "slug": "gotion",
   "identifier": "id.my.ryanda.gotion",
-  "icon": "resources/icon.png"
+  "version": "0.1.0",
+  "copyright": "Copyright © 2026 Ryanda",
+  "icon": "resources/icon.png",
+  "updates": {
+    "publicKey": "WGsd19OcswQy5qSs0CdfucP60KZokQpGh5sR8FucTuY=",
+    "github": "ryandaaa/gotion"
+  }
 }

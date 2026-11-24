@@ -6,11 +6,18 @@ const kv = new Map();
 const env = {
   NOTION_CLIENT_ID: "cid",
   NOTION_CLIENT_SECRET: "secret",
+  GITHUB_REPO: "me/gotion",
   EVENTS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => void kv.set(k, v) },
 };
 let lastToken;
 let meCalls = 0;
+let releases = 0;
+let release = null; // none published yet
 globalThis.fetch = async (url, init) => {
+  if (url === "https://api.github.com/repos/me/gotion/releases/latest") {
+    releases++;
+    return release ? Response.json(release) : Response.json({ message: "Not Found" }, { status: 404 });
+  }
   if (url === "https://api.notion.com/v1/users/me") {
     meCalls++;
     const ok = init.headers.Authorization === "Bearer tok-A";
@@ -101,5 +108,38 @@ assert.equal(meCalls, 1, "the token's workspace is cached");
 assert.equal((await call("/events", { headers: { Authorization: "Bearer stolen" } })).status, 401);
 assert.equal((await call("/events")).status, 401);
 for (const k of kv.keys()) assert.ok(!k.includes("tok-A"), "tokens are never kept as such");
+
+// downloads: none before the first release, then the newest file of each kind.
+r = await call("/download/windows");
+assert.equal(r.status, 404);
+assert.match(await r.text(), /Coming soon/);
+assert.equal((await call("/download/nonsense")).status, 404);
+release = {
+  assets: [
+    { name: "gotion-setup-0.2.0-amd64.exe", browser_download_url: "https://dl/win64" },
+    { name: "gotion-setup-0.2.0-arm64.exe", browser_download_url: "https://dl/winarm" },
+    { name: "gotion-0.2.0-arm64.dmg", browser_download_url: "https://dl/mac" },
+    { name: "gotion-0.2.0-amd64.dmg", browser_download_url: "https://dl/macintel" },
+    { name: "gotion_0.2.0_amd64.deb", browser_download_url: "https://dl/deb" },
+    { name: "gotion-0.2.0-1.x86_64.rpm", browser_download_url: "https://dl/rpm" },
+    { name: "gotion-0.2.0-linux-amd64.tar.gz", browser_download_url: "https://dl/tar" },
+    { name: "install.sh", browser_download_url: "https://dl/install" },
+  ],
+};
+r = await call("/download/windows");
+assert.equal(r.status, 404, "the answer of a few minutes ago still holds");
+const realNow = Date.now;
+Date.now = () => realNow() + 6 * 60 * 1000; // five minutes later
+for (const [kind, where] of Object.entries({
+  windows: "https://dl/win64", "windows-arm": "https://dl/winarm", mac: "https://dl/mac", "mac-intel": "https://dl/macintel",
+  "linux-deb": "https://dl/deb", "linux-rpm": "https://dl/rpm", "linux-tar": "https://dl/tar", "install.sh": "https://dl/install",
+})) {
+  r = await call("/download/" + kind);
+  assert.equal(r.status, 302, kind);
+  assert.equal(r.headers.get("Location"), where, kind);
+}
+r = await call("/download/releases");
+assert.equal(r.headers.get("Location"), "https://github.com/me/gotion/releases");
+assert.equal(releases, 2, "GitHub is asked once per five minutes");
 
 console.log("worker: all checks passed");

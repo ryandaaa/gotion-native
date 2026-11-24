@@ -370,4 +370,6 @@ var en = map[string]string{
 	"Muat ulang":                                                             "Reload",
 	"Pilih halaman lain":                                                     "Choose more pages",
 	"Buka halaman izin Notion untuk menambah atau mengurangi halaman yang boleh dibuka gotion.": "Opens Notion's permission page to add or remove the pages gotion may open.",
+	"Periksa pembaruan": "Check for updates",
+	"Pembaruan otomatis hanya ada di versi rilis. Unduh yang terbaru dari gotion.ryanda.my.id.": "Automatic updates come with release builds. Download the latest from gotion.ryanda.my.id.",
 }

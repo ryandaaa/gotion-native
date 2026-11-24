@@ -19,6 +19,10 @@ import (
 // -ldflags "-X gotion/internal/app.Version=…".
 var Version = "0.1.0-dev"
 
+// CheckForUpdates looks for a newer gotion and offers it, reporting false
+// where updates are off (a development build); main sets it.
+var CheckForUpdates = func() bool { return false }
+
 // settingsView is the settings dialog: what shows on the left, and the
 // section open.
 type settingsView struct {
@@ -253,7 +257,12 @@ func (a *App) accountSection(c *ui.Context) {
 func (a *App) aboutSection(c *ui.Context) {
 	p := a.pal()
 	a.sectionTitle(c, tr.T("Tentang gotion"), tr.T("Notion di desktop, ringan dan native."))
-	ui.Text(c, tr.T("Versi ")+Version).FontSize(14)
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Wrap().Children(func() {
+		ui.Text(c, tr.T("Versi ")+Version).FontSize(14)
+		if a.btn(c, tr.T("Periksa pembaruan"), iconRefresh, false, false) && !CheckForUpdates() {
+			a.toast(tr.T("Pembaruan otomatis hanya ada di versi rilis. Unduh yang terbaru dari gotion.ryanda.my.id."))
+		}
+	})
 	ui.Column(c).Gap(6).Children(func() {
 		for _, l := range []struct{ label, url string }{
 			{tr.T("Situs gotion"), "https://gotion.ryanda.my.id"},

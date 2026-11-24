@@ -4,6 +4,10 @@ compatibility_date = "2026-11-01"
 account_id = "1c73f06b1e20ec6d3ed31016c7937acd"
 routes = [{ pattern = "gotion.ryanda.my.id", custom_domain = true }]
 
+# Where the website's download links find the releases.
+[vars]
+GITHUB_REPO = "ryandaaa/gotion"
+
 # The webhook's verification token, the events kept per workspace, and
 # which workspace a token belongs to (by its hash).
 [[kv_namespaces]]

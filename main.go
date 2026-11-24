@@ -2,6 +2,8 @@
 package main
 
 import (
+	"github.com/egoist/mygo/plugins/updater"
+	"github.com/egoist/mygo/plugins/updater/native"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,9 +27,22 @@ func main() {
 		defer func() { recover() }() // before the app is ready: none yet
 		return mygo.App.PreferredLanguages()
 	}
+	// Updates: a window offers each new release, signed with the key whose
+	// public half is in mygo.json; it stays off in development builds.
+	mygo.Use(native.Plugin)
 	a := app.New()
 	mygo.App.WhenReady(func() {
 		a.ApplyLanguage() // the system's languages are known now
+		if v := mygo.App.Version(); v != "" {
+			app.Version = v
+		}
+		app.CheckForUpdates = func() bool {
+			if !mygo.Updater.Enabled() {
+				return false
+			}
+			updater.CheckForUpdates()
+			return true
+		}
 		if runtime.GOOS == "darwin" {
 			// The Mac's menu bar; elsewhere the window draws its own bar.
 			mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{

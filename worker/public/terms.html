@@ -1,50 +1,94 @@
 <!doctype html>
-<html lang="id">
+<html lang="en" data-lang="en" data-title-en="Terms of Use · gotion" data-title-id="Ketentuan Penggunaan · gotion">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ketentuan Penggunaan — gotion</title>
-<meta name="description" content="Ketentuan penggunaan aplikasi gotion.">
+<script>
+  (function () {
+    var l;
+    try { l = localStorage.getItem("lang"); } catch (e) {}
+    if (l !== "id" && l !== "en") l = /^(id|in)\b/i.test(navigator.language || "") ? "id" : "en";
+    document.documentElement.dataset.lang = l;
+    document.documentElement.lang = l;
+  })();
+</script>
+<title>Terms of Use · gotion</title>
+<meta name="description" content="The terms of using gotion, kept short.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
+<script src="/site.js" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <nav>
-    <a class="brand" href="/"><img src="/favicon.svg" alt="">gotion</a>
-    <div class="links"><a href="/">Beranda</a><a href="/privacy">Privasi</a></div>
-  </nav>
-  <article class="doc">
-    <h1>Ketentuan Penggunaan</h1>
-    <div class="updated">Terakhir diperbarui 24 November 2026</div>
+  <header class="top">
+    <a class="brand" href="/"><img src="/favicon.svg" width="28" height="28" alt="">gotion</a>
+    <nav aria-label="Main">
+      <a href="/"><span lang="en">Home</span><span lang="id">Beranda</span></a>
+      <a href="/privacy"><span lang="en">Privacy</span><span lang="id">Privasi</span></a>
+      <button class="lang" type="button" data-lang-switch aria-label="Bahasa Indonesia / English">
+        <span lang="en">Bahasa Indonesia</span><span lang="id">English</span>
+      </button>
+    </nav>
+  </header>
+  <main>
+    <article class="doc" lang="en">
+      <h1>Terms of Use</h1>
+      <div class="updated">Last updated 24 November 2026</div>
+      <p>By using gotion, you agree to the terms below. They are kept short on purpose.</p>
 
-    <p>Dengan memakai gotion, kamu setuju dengan ketentuan berikut. Ketentuan ini sengaja dibuat singkat.</p>
+      <h2>The service</h2>
+      <p>gotion is a free desktop app for opening and editing your Notion pages through Notion's official API. gotion is not a product of Notion Labs, Inc. and is not affiliated with it. Your use of your Notion account stays subject to Notion's terms.</p>
 
-    <h2>Layanan</h2>
-    <p>gotion adalah aplikasi desktop gratis untuk membuka dan mengedit halaman Notion milikmu lewat API resmi Notion. gotion bukan produk Notion Labs, Inc. dan tidak berafiliasi dengannya. Pemakaian akun Notion-mu tetap tunduk pada ketentuan layanan Notion.</p>
+      <h2>Your content and account</h2>
+      <p>Your pages stay yours. gotion only reads and changes the pages you allowed, when you ask it to. You are responsible for what you write and for the security of the computer gotion is installed on.</p>
 
-    <h2>Isi dan akunmu</h2>
-    <p>Isi halamanmu tetap milikmu. gotion hanya membaca dan mengubah halaman yang kamu izinkan, atas perintahmu. Kamu bertanggung jawab atas apa yang kamu tulis dan atas keamanan komputer tempat gotion terpasang.</p>
+      <h2>No warranty</h2>
+      <p>gotion is provided as is, without any warranty. We work to make syncing lose nothing, but keep backups of what matters. As far as the law allows, we are not liable for losses from using gotion, including data lost or changed.</p>
 
-    <h2>Tanpa jaminan</h2>
-    <p>gotion disediakan apa adanya, tanpa jaminan apa pun. Kami berusaha agar sinkronisasi tidak kehilangan data, tetapi tetap simpan cadangan untuk hal penting. Sejauh diizinkan hukum, kami tidak bertanggung jawab atas kerugian yang timbul dari pemakaian gotion, termasuk data yang hilang atau berubah.</p>
+      <h2>Fair use</h2>
+      <p>Do not use gotion or its server to overload, attack or misuse Notion or our services.</p>
 
-    <h2>Pemakaian yang wajar</h2>
-    <p>Jangan memakai gotion atau server loginnya untuk membebani, menyerang, atau menyalahgunakan Notion maupun layanan kami.</p>
+      <h2>Changes</h2>
+      <p>These terms can be updated. The newest version is always on this page, and using gotion after an update means you accept it.</p>
 
-    <h2>Perubahan</h2>
-    <p>Ketentuan ini bisa diperbarui. Versi terbaru selalu ada di halaman ini, dan memakai gotion setelah pembaruan berarti menyetujui versi itu.</p>
+      <h2>Contact</h2>
+      <p>Questions or problem reports: <a href="mailto:anakriryanda@gmail.com">anakriryanda@gmail.com</a>.</p>
 
-    <h2>Kontak</h2>
-    <p>Pertanyaan atau laporan masalah: <a href="mailto:anakriryanda@gmail.com">anakriryanda@gmail.com</a>.</p>
+      <h2>Credits</h2>
+      <p>gotion's emoji are Twemoji (© Twitter, Inc. and other contributors, CC-BY 4.0). The Inter font is released under the SIL Open Font License 1.1.</p>
+    </article>
 
-    <h2>Atribusi</h2>
-    <p>Emoji di gotion memakai Twemoji (© Twitter, Inc. dan kontributor lain, CC-BY 4.0). Font Inter dirilis di bawah SIL Open Font License 1.1.</p>
-  </article>
+    <article class="doc" lang="id">
+      <h1>Ketentuan Penggunaan</h1>
+      <div class="updated">Terakhir diperbarui 24 November 2026</div>
+      <p>Dengan memakai gotion, kamu setuju dengan ketentuan berikut. Ketentuan ini sengaja dibuat singkat.</p>
+
+      <h2>Layanan</h2>
+      <p>gotion adalah aplikasi desktop gratis untuk membuka dan mengedit halaman Notion milikmu lewat API resmi Notion. gotion bukan produk Notion Labs, Inc. dan tidak berafiliasi dengannya. Pemakaian akun Notion-mu tetap tunduk pada ketentuan layanan Notion.</p>
+
+      <h2>Isi dan akunmu</h2>
+      <p>Isi halamanmu tetap milikmu. gotion hanya membaca dan mengubah halaman yang kamu izinkan, atas perintahmu. Kamu bertanggung jawab atas apa yang kamu tulis dan atas keamanan komputer tempat gotion terpasang.</p>
+
+      <h2>Tanpa jaminan</h2>
+      <p>gotion disediakan apa adanya, tanpa jaminan apa pun. Kami berusaha agar sinkronisasi tidak kehilangan data, tetapi tetap simpan cadangan untuk hal penting. Sejauh diizinkan hukum, kami tidak bertanggung jawab atas kerugian yang timbul dari pemakaian gotion, termasuk data yang hilang atau berubah.</p>
+
+      <h2>Pemakaian yang wajar</h2>
+      <p>Jangan memakai gotion atau servernya untuk membebani, menyerang, atau menyalahgunakan Notion maupun layanan kami.</p>
+
+      <h2>Perubahan</h2>
+      <p>Ketentuan ini bisa diperbarui. Versi terbaru selalu ada di halaman ini, dan memakai gotion setelah pembaruan berarti menyetujui versi itu.</p>
+
+      <h2>Kontak</h2>
+      <p>Pertanyaan atau laporan masalah: <a href="mailto:anakriryanda@gmail.com">anakriryanda@gmail.com</a>.</p>
+
+      <h2>Atribusi</h2>
+      <p>Emoji di gotion memakai Twemoji (© Twitter, Inc. dan kontributor lain, CC-BY 4.0). Font Inter dirilis di bawah SIL Open Font License 1.1.</p>
+    </article>
+  </main>
   <footer>
     <span>© 2026 gotion</span>
-    <a href="/">Beranda</a>
-    <a href="/privacy">Kebijakan Privasi</a>
+    <a href="/"><span lang="en">Home</span><span lang="id">Beranda</span></a>
+    <a href="/privacy"><span lang="en">Privacy</span><span lang="id">Privasi</span></a>
   </footer>
 </div>
 </body>

@@ -10,6 +10,8 @@
 //   POST /webhook               <- Notion's events, signed; kept a while
 //   GET  /events?since=T        -> a workspace's events since T, for the
 //                                  app holding one of its tokens
+//   GET  /download/<kind>       -> the newest release's file of that kind,
+//                                  on GitHub (GITHUB_REPO)
 //
 // Secrets: NOTION_CLIENT_ID, NOTION_CLIENT_SECRET (wrangler secret put).
 // KV: EVENTS, for the webhook's verification token, the events and which
@@ -27,6 +29,7 @@ export default {
       if (url.pathname === "/refresh" && request.method === "POST") return await refresh(request, env);
       if (url.pathname === "/webhook" && request.method === "POST") return await webhook(request, env);
       if (url.pathname === "/events" && request.method === "GET") return await events(request, url, env);
+      if (url.pathname.startsWith("/download/") && request.method === "GET") return await download(url, env);
       return new Response("gotion OAuth", { status: 404 });
     } catch (e) {
       return page("Login gagal", "Terjadi kesalahan: " + e.message, 500);
@@ -218,4 +221,58 @@ async function events(request, url, env) {
   const since = url.searchParams.get("since") || "";
   const list = JSON.parse((await env.EVENTS.get("ev:" + workspace)) || "[]");
   return Response.json({ events: list.filter((e) => !since || e.timestamp > since), now: new Date().toISOString() });
+}
+
+// The files of a release, by what the website calls them. Their names are
+// those mygo build gives: gotion-setup-0.1.0-amd64.exe, gotion-0.1.0-arm64.dmg,
+// gotion_0.1.0_amd64.deb, gotion-0.1.0-1.x86_64.rpm,
+// gotion-0.1.0-linux-amd64.tar.gz, install.sh.
+const ASSETS = {
+  windows: /-setup-.*-amd64\.exe$/,
+  "windows-arm": /-setup-.*-arm64\.exe$/,
+  mac: /-arm64\.dmg$/,
+  "mac-intel": /-amd64\.dmg$/,
+  "linux-deb": /_amd64\.deb$/,
+  "linux-rpm": /\.x86_64\.rpm$/,
+  "linux-tar": /-linux-amd64\.tar\.gz$/,
+  "install.sh": /^install\.sh$/,
+};
+
+// The newest release, asked of GitHub at most every 5 minutes per Worker.
+let latest = { at: 0, release: null };
+
+async function newestRelease(repo) {
+  if (Date.now() - latest.at < 5 * 60 * 1000) return latest.release;
+  const res = await fetch("https://api.github.com/repos/" + repo + "/releases/latest", {
+    headers: { "User-Agent": "gotion-website", Accept: "application/vnd.github+json" },
+  });
+  const release = res.ok ? await res.json() : null;
+  latest = { at: Date.now(), release };
+  return release;
+}
+
+// download sends the visitor to the newest release's file, or tells them
+// there is none yet.
+async function download(url, env) {
+  const repo = env.GITHUB_REPO || "";
+  const kind = url.pathname.slice("/download/".length);
+  if (kind === "releases") {
+    const release = repo && (await newestRelease(repo));
+    if (release) return Response.redirect("https://github.com/" + repo + "/releases", 302);
+    return notYet();
+  }
+  const pattern = ASSETS[kind];
+  if (!pattern) return page("Not found · Tidak ditemukan", "No such download. · Unduhan itu tidak ada.", 404);
+  const release = repo && (await newestRelease(repo));
+  const asset = release && (release.assets || []).find((a) => pattern.test(a.name));
+  if (!asset) return notYet();
+  return Response.redirect(asset.browser_download_url, 302);
+}
+
+function notYet() {
+  return page(
+    "Coming soon · Segera hadir",
+    "gotion has no release for this system yet. Check back soon. · Belum ada rilis gotion untuk sistem ini. Coba lagi nanti.",
+    404,
+  );
 }

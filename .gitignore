@@ -1,3 +1,5 @@
 build/
 /gotion
-*.png
+# test snapshots; the icon and the website's pictures are kept
+/*.png
+dist/

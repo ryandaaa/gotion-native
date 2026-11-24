@@ -25,7 +25,7 @@ func TestHero(t *testing.T) {
 	if err := json.Unmarshal([]byte(heroPage), &blocks); err != nil {
 		t.Fatal(err)
 	}
-	for _, v := range []struct{ name, theme, wash string }{{"hero-light", "light", "lavender"}, {"hero-dark", "dark", "senja"}} {
+	for _, v := range []struct{ name, theme, wash string }{{"hero-light", "light", "polos"}, {"hero-dark", "dark", "polos"}} {
 		a := tableApp(t)
 		a.set.Theme, a.set.Wash = v.theme, v.wash
 		a.nodes = map[string]*node{}
