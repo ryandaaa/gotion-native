@@ -864,7 +864,13 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 			a.focus = i
 		}
 		if e.Changed() {
-			if brokeReadOnly(pn.doc, pn.readOnly) {
+			if id, emptied := emptiedReadOnly(pn.doc, pn.readOnly); emptied && pn.session != nil && pn.session.Deletable(id) {
+				// Backspace or Delete on a picture, a file or a divider
+				// takes its block out of the page.
+				removeParagraph(pn.doc, id)
+				a.edited(pn)
+				a.toast("Dihapus dari halaman")
+			} else if brokeReadOnly(pn.doc, pn.readOnly) {
 				// Sub-pages, images and tables are not edited here: take
 				// the edit back.
 				pn.doc.Undo()

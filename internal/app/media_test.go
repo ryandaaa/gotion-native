@@ -156,3 +156,72 @@ func TestClickImageOpensViewer(t *testing.T) {
 		t.Error("a click on the picture did not open it")
 	}
 }
+
+// TestDeleteImageFromViewer opens a picture full size and deletes it: its
+// block goes from Notion. A sub-page on the page cannot be deleted so.
+func TestDeleteImageFromViewer(t *testing.T) {
+	rec := &recorder{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		path := strings.TrimPrefix(r.URL.Path, "/v1")
+		rec.mu.Lock()
+		rec.sent = append(rec.sent, r.Method+" "+path+" "+string(b))
+		rec.mu.Unlock()
+		switch {
+		case path == "/pages/p":
+			io.WriteString(w, `{"object":"page","id":"p","last_edited_by":{"id":"u"}}`)
+		case path == "/blocks/p/children" && r.Method == "GET":
+			io.WriteString(w, `{"results":[
+			 {"object":"block","id":"img1","type":"image","image":{"type":"external","external":{"url":"http://x/no.png"}}},
+			 {"object":"block","id":"sub","type":"child_page","child_page":{"title":"Sub"}},
+			 {"object":"block","id":"t","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"teks","annotations":{"color":"default"}}]}}],"has_more":false}`)
+		default:
+			io.WriteString(w, `{}`)
+		}
+	}))
+	defer srv.Close()
+	a := tableApp(t)
+	a.client = notion.New("x")
+	a.client.Base = srv.URL + "/v1"
+	s, text, _, err := syncer.Open(context.Background(), a.client, "bot", "p", doc.Shape{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Deletable("sub") || !s.Deletable("img1") {
+		t.Fatalf("deletable: sub %v img %v", s.Deletable("sub"), s.Deletable("img1"))
+	}
+	pn := &panel{id: "ppsi", title: "Gambar", session: s, doc: richtext.NewDocument(text)}
+	a.panels[0] = pn
+	a.guardReadOnly(pn)
+	a.viewer = viewer{open: true, img: ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>`)), id: "img1", panel: 0}
+	tester := ui.NewTester(a.View, 1100, 600)
+	tester.Advance(time.Second)
+	if err := tester.Click("Hapus gambar"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	for _, p := range paragraphsOf(pn.doc) {
+		if p.Style.ID == "img1" {
+			t.Errorf("the picture's line is still there: %q", paragraphsTexts(pn.doc))
+		}
+	}
+	if a.viewer.open {
+		t.Error("the viewer stayed open")
+	}
+	s.Start()
+	defer s.Close()
+	if !waitSent(rec, "DELETE /blocks/img1") {
+		t.Errorf("sent:\n%s", rec.all())
+	}
+	if strings.Contains(rec.all(), "DELETE /blocks/sub") {
+		t.Error("the sub-page went too")
+	}
+}
+
+func paragraphsTexts(d *richtext.Document) string {
+	var out []string
+	for _, p := range paragraphsOf(d) {
+		out = append(out, runsText(p))
+	}
+	return strings.Join(out, "|")
+}

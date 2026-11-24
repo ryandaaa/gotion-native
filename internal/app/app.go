@@ -691,7 +691,7 @@ func (a *App) followLink(i int) func(url string) {
 			switch kind {
 			case "image":
 				if img := a.imageIn(p, id); img != nil {
-					a.viewer = viewer{open: true, img: img}
+					a.viewer = viewer{open: true, img: img, id: id, panel: i}
 				}
 			case "file":
 				a.download(id)

@@ -583,3 +583,21 @@ func (s *Session) Movable(id string) bool {
 	k := s.known[id]
 	return k == nil || !k.ReadOnly && !k.HasChildren
 }
+
+// Deletable reports whether the editor's paragraph id shows a read-only
+// block the user may delete from the page: a picture, a file, a divider or
+// an embed. Not a sub-page or a database: deleting their block would put
+// the whole page or database in Notion's trash.
+func (s *Session) Deletable(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := s.known[id]
+	if k == nil || !k.ReadOnly || k.Hidden {
+		return false
+	}
+	switch k.Type {
+	case "image", "file", "pdf", "video", "audio", "divider", "bookmark", "embed", "link_preview", "equation", "table_of_contents", "breadcrumb":
+		return true
+	}
+	return false
+}

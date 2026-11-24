@@ -72,3 +72,23 @@ func TestReadOnlyGuard(t *testing.T) {
 		t.Error("deleting a read-only line whole was refused")
 	}
 }
+
+func TestBackspaceEmptiesAPicture(t *testing.T) {
+	obj := string(richtext.ObjectReplacement)
+	d := richtext.NewDocument(richtext.TextOf(
+		richtext.Paragraph{Style: richtext.ParagraphStyle{ID: "a"}, Runs: []richtext.Run{{Text: "teks"}}},
+		richtext.Paragraph{Style: richtext.ParagraphStyle{ID: "img"}, Runs: []richtext.Run{{Text: obj}}},
+	))
+	ro := map[string]string{"img": obj}
+	// The caret after the picture, Backspace.
+	d.SetSelection(5, 6)
+	d.InsertText("")
+	id, emptied := emptiedReadOnly(d, ro)
+	if id != "img" || !emptied {
+		t.Fatalf("id %q emptied %v", id, emptied)
+	}
+	removeParagraph(d, "img")
+	if got := paragraphsTexts(d); got != "teks" {
+		t.Errorf("%q", got)
+	}
+}

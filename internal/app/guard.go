@@ -41,3 +41,30 @@ func brokeReadOnly(d *richtext.Document, readOnly map[string]string) bool {
 	sig, ok := readOnly[t.ParagraphStyleAt(caret).ID]
 	return ok && paragraphText(t, caret) != sig
 }
+
+// emptiedReadOnly reports whether the last edit emptied the read-only
+// paragraph at the caret, as Backspace or Delete on a picture does, and
+// which it is.
+func emptiedReadOnly(d *richtext.Document, readOnly map[string]string) (string, bool) {
+	if len(readOnly) == 0 {
+		return "", false
+	}
+	t := d.Text()
+	_, caret := d.Selection()
+	id := t.ParagraphStyleAt(caret).ID
+	if _, ok := readOnly[id]; !ok {
+		return "", false
+	}
+	return id, paragraphText(t, caret) == ""
+}
+
+// removeParagraph takes the paragraph named id out of the document.
+func removeParagraph(d *richtext.Document, id string) bool {
+	for i, p := range paragraphsOf(d) {
+		if p.Style.ID == id {
+			deleteBlock(d, i)
+			return true
+		}
+	}
+	return false
+}

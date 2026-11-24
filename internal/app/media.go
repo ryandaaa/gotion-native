@@ -188,8 +188,10 @@ func freeName(dir, name string) string {
 
 // viewer shows a picture full size over the window.
 type viewer struct {
-	open bool
-	img  ui.ImageSource
+	open  bool
+	img   ui.ImageSource
+	id    string // its block
+	panel int
 }
 
 func (a *App) viewerView(c *ui.Context) {
@@ -200,11 +202,28 @@ func (a *App) viewerView(c *ui.Context) {
 	}
 	scrim := ui.Column(c.Key("viewer")).Absolute().Left(0).Top(0).Right(0).Bottom(0).ZIndex(60).
 		Background(ui.RGBA(0, 0, 0, 0.82)).Center().Padding(40).Modal().Cursor(ui.CursorPointer).Transition(fadeIn)
+	removed := false
 	scrim.Children(func() {
 		ui.Image(c, v.img).Fit(ui.Contain).Grow(1).MinHeight(0).FillWidth().Radius(6).Transition(popIn)
-		ui.Text(c, "Klik di mana saja atau tekan Esc untuk menutup").FontSize(12).TextColor(ui.RGBA(255, 255, 255, 0.6)).Margin(12, 0, 0, 0)
+		ui.Row(c).Gap(16).AlignItems(ui.Center).Margin(14, 0, 0, 0).Children(func() {
+			ui.Text(c, "Klik di mana saja atau tekan Esc untuk menutup").FontSize(12).TextColor(ui.RGBA(255, 255, 255, 0.6))
+			if pn := a.panels[v.panel]; v.id != "" && pn != nil && pn.session != nil && pn.session.Deletable(v.id) {
+				del := ui.Text(c.Key("delete-image"), "Hapus gambar").FontSize(13).FontWeight(500).
+					TextColor(ui.Hex("#ffb4ab")).Padding(6, 12).Radius(7).Background(ui.RGBA(255, 255, 255, 0.1)).Cursor(ui.CursorPointer)
+				if del.Hovered() {
+					del.Background(ui.RGBA(255, 255, 255, 0.18))
+				}
+				if del.Clicked() {
+					removed = true
+					if removeParagraph(pn.doc, v.id) {
+						a.edited(pn)
+						a.toast("Gambar dihapus dari halaman")
+					}
+				}
+			}
+		})
 	})
-	if scrim.Clicked() {
+	if scrim.Clicked() || removed {
 		v.open = false
 	}
 }
