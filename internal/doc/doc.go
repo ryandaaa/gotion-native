@@ -542,3 +542,15 @@ func appendText(rt []any, s string, at richtext.Attributes) []any {
 	}
 	return rt
 }
+
+// Mention is a run that mentions a page or a person, as Notion takes it in
+// rich text: kept whole, shown as label in the accent color.
+func Mention(kind, id, label string) richtext.Run {
+	item := map[string]any{
+		"type":       "mention",
+		"mention":    map[string]any{"type": kind, kind: map[string]string{"id": id}},
+		"plain_text": label,
+	}
+	b, _ := json.Marshal(item)
+	return richtext.Run{Text: label, Attributes: richtext.Attributes{Tag: rawTag + string(b), Color: ui.Hex("#2563EB")}}
+}

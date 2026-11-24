@@ -904,7 +904,7 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 				if k == ui.KeyV && m == ui.Cmd && a.pasteImage(pn) {
 					return true
 				}
-				return a.slashKey(pn, k, m)
+				return a.mentionKey(pn, k, m) || a.slashKey(pn, k, m)
 			},
 			Menu: func(m *ui.Menu) {
 				m.EditItems()
@@ -945,11 +945,13 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 					pn.session.Edited(pn.doc.Text())
 				}
 				a.slashUpdate(pn)
+				a.mentionUpdate(pn)
 			}
 		}
 		a.trackScroll(pn)
 		a.handles(c, pn, box, pad)
 		a.slashView(c, pn)
+		a.mentionView(c, pn)
 		if e.Focused() && !pn.slash.open {
 			a.formatBar(c, pn)
 		}

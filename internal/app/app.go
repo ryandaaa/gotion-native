@@ -51,6 +51,8 @@ type panel struct {
 	slash slashState
 	// the + beside blocks
 	handle handleState
+	// the @ popup
+	mention mentionState
 	// the ••• menu of the page
 	menu pageMenu
 	// the comments beside it

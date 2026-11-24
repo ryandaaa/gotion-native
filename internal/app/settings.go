@@ -270,29 +270,8 @@ func (a *App) aboutSection(c *ui.Context) {
 func (a *App) members(c *ui.Context) {
 	p := a.pal()
 	s := &a.settings
-	if !s.membersLoaded && !s.membersLoading && a.client != nil {
-		s.membersLoading = true
-		client := a.client
-		go func() {
-			users, err := client.Users(context.Background())
-			a.update(func() {
-				s.membersLoading, s.membersLoaded = false, true
-				if err != nil {
-					var e *notion.Error
-					if errors.As(err, &e) && e.Status == 403 {
-						s.membersErr = "Integrasi ini belum boleh melihat anggota. Aktifkan “Read user information” di pengaturan integrasi Notion."
-					} else {
-						s.membersErr = errText(err)
-					}
-					return
-				}
-				for _, u := range users {
-					if u.Type == "person" {
-						s.members = append(s.members, u)
-					}
-				}
-			})
-		}()
+	if !s.membersLoaded && !s.membersLoading {
+		a.loadMembers()
 	}
 	ui.Column(c).Gap(8).Children(func() {
 		ui.Text(c, "Anggota workspace").FontSize(12).FontWeight(600).TextColor(p.Faint)
@@ -320,4 +299,34 @@ func (a *App) members(c *ui.Context) {
 			})
 		}
 	})
+}
+
+// loadMembers fetches the workspace's people (GET /users), once.
+func (a *App) loadMembers() {
+	s := &a.settings
+	if a.client == nil {
+		return
+	}
+	s.membersLoading = true
+	client := a.client
+	go func() {
+		users, err := client.Users(context.Background())
+		a.update(func() {
+			s.membersLoading, s.membersLoaded = false, true
+			if err != nil {
+				var e *notion.Error
+				if errors.As(err, &e) && e.Status == 403 {
+					s.membersErr = "Integrasi ini belum boleh melihat anggota. Aktifkan “Read user information” di pengaturan integrasi Notion."
+				} else {
+					s.membersErr = errText(err)
+				}
+				return
+			}
+			for _, u := range users {
+				if u.Type == "person" {
+					s.members = append(s.members, u)
+				}
+			}
+		})
+	}()
 }
