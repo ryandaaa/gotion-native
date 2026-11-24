@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"gotion/internal/tr"
+	"gotion/internal/wallpaper"
 	"os"
 	"path/filepath"
 	"sort"
@@ -99,6 +100,12 @@ type App struct {
 	// buttonsSet is the theme the window buttons were last drawn for:
 	// 0 not yet, 1 light, 2 dark.
 	buttonsSet int
+	// wallDark is the wallpaper behind the sidebar, for the "wallpaper"
+	// mode: 0 not known, 1 light, 2 dark. watchWall reads it.
+	wallDark int
+	// wall is what the watcher needs of the settings, read off the UI's
+	// goroutine.
+	wall *wallState
 	// searched tells that Notion said which pages there are, at least
 	// once since signing in: none then means none were shared.
 	searched bool
@@ -154,6 +161,10 @@ func (a *App) Attach(w *mygo.Window) {
 	a.win = w
 	mygo.App.SetLocale(tr.Lang())
 	a.applyGlass()
+	if w != nil && wallpaper.Supported() && a.wall == nil {
+		a.wall = &wallState{}
+		go a.watchWall(a.wall)
+	}
 	if a.client == nil {
 		return
 	}
@@ -225,6 +236,9 @@ type settings struct {
 	Wash         string          `json:"wash"`    // the color behind the cards
 	Trashed      []trashed       `json:"trashed"` // pages put in the trash from gotion
 	Glass        bool            `json:"glass"`   // the system's glass behind them
+	// GlassKind is Windows' material for the glass: "mica" (or "") tints
+	// with the wallpaper, "acrylic" blurs what is behind the window.
+	GlassKind string `json:"glassKind"`
 	// Views is how each database shows: "table" or "cards".
 	Views map[string]string `json:"views"`
 	// Language is "id" or "en", or "" to follow the system's.
@@ -353,7 +367,7 @@ func (a *App) signOut() {
 	deleteToken()
 	set := a.set
 	set.Last, set.Second = "", ""
-	*a = App{win: a.win, set: set, panels: [2]*panel{{}, nil}, dark: a.dark, nodes: map[string]*node{}}
+	*a = App{win: a.win, set: set, panels: [2]*panel{{}, nil}, dark: a.dark, nodes: map[string]*node{}, wall: a.wall, wallDark: a.wallDark}
 	a.saveSettings()
 }
 

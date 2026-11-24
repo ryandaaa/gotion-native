@@ -22,7 +22,15 @@ const readWidth = 760
 func (a *App) View(c *ui.Context) {
 	// Before SetTheme, the theme is the system's.
 	sysDark := c.Theme().Dark
-	a.dark = a.set.Theme == "dark" || a.set.Theme != "light" && sysDark
+	switch {
+	case a.set.Theme == "wallpaper" && a.wallDark != 0:
+		a.dark = a.wallDark == 2
+	default:
+		a.dark = a.set.Theme == "dark" || a.set.Theme != "light" && sysDark
+	}
+	if a.wall != nil {
+		a.wall.set(a.set.Theme == "wallpaper", a.set.SidebarWidth, a.set.SidebarOff)
+	}
 	if a.win != nil && (a.buttonsSet == 0 || (a.buttonsSet == 2) != a.dark) {
 		// Windows draws its window buttons for the system's theme, not the
 		// app's: light glyphs on a light page when only the system is dark.
@@ -58,9 +66,9 @@ func (a *App) View(c *ui.Context) {
 		// The system's glass shows through: only a veil of the sidebar's
 		// color, or of the wash, keeps the text on it legible.
 		if w.plain() {
-			c.Root().Background(p.Sidebar.Alpha(0.55))
+			c.Root().Background(p.Sidebar.Alpha(a.veil() - 0.05))
 		} else {
-			c.Root().LinearGradient(alphaGradient(w.base(a.dark), 0.6))
+			c.Root().LinearGradient(alphaGradient(w.base(a.dark), a.veil()))
 			root.LinearGradient(w.glow(a.dark))
 		}
 	case w.plain():
@@ -415,7 +423,7 @@ func (a *App) item(c *ui.Context, n *node, depth int) {
 				if a.set.Open[n.ID] {
 					s = iconDown
 				}
-				ui.Icon(c, s).Size(12, 12).TextColor(p.Faint)
+				ui.Icon(c, s).Size(14, 14).TextColor(p.Muted)
 			})
 			if arrow.Hovered() {
 				arrow.Background(p.Line)
@@ -426,9 +434,9 @@ func (a *App) item(c *ui.Context, n *node, depth int) {
 		case n.Emoji != "":
 			emoji.View(c, n.Emoji, 15)
 		case n.Kind != "page":
-			ui.Icon(c, iconTable).Size(14, 14).TextColor(p.Faint)
+			ui.Icon(c, iconTable).Size(14, 14).TextColor(p.Muted)
 		default:
-			ui.Icon(c, iconPage).Size(14, 14).TextColor(p.Faint)
+			ui.Icon(c, iconPage).Size(14, 14).TextColor(p.Muted)
 		}
 		ui.Text(c, n.Title).FontSize(14).SingleLine().Grow(1).MinWidth(0)
 		if hovered {

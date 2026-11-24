@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // TestStartsWithDamagedFiles: settings and the page cache cut short by a
@@ -56,5 +58,32 @@ func TestSettingsAreWrittenWhole(t *testing.T) {
 	}
 	if loadSettings().Theme != "dark" {
 		t.Error("not saved")
+	}
+}
+
+// TestWallpaperMode: the "wallpaper" mode is dark over a dark wallpaper and
+// light over a light one, and follows the system until the wallpaper is
+// known.
+func TestWallpaperMode(t *testing.T) {
+	a := &App{set: loadSettings(), nodes: map[string]*node{}}
+	a.set.Theme = "wallpaper"
+	tester := ui.NewTester(a.View, 900, 600)
+	for _, c := range []struct {
+		wall int
+		dark bool
+	}{{2, true}, {1, false}} {
+		a.wallDark = c.wall
+		tester.Frame()
+		if a.dark != c.dark {
+			t.Errorf("wallpaper %d: dark %v", c.wall, a.dark)
+		}
+	}
+	a.wallDark = 0
+	tester.Frame()
+	sys := a.dark
+	a.set.Theme = "system"
+	tester.Frame()
+	if a.dark != sys {
+		t.Error("unknown wallpaper: not the system's mode")
 	}
 }

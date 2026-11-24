@@ -20,10 +20,32 @@ func (a *App) applyGlass() {
 		return
 	}
 	if a.set.Glass {
-		a.win.SetVibrancy(mygo.VibrancyGlass)
+		a.win.SetVibrancy(glassMaterial(a.set.GlassKind))
 	} else {
 		a.win.SetVibrancy(mygo.VibrancyNone)
 	}
+}
+
+// glassMaterial is the system's material for the glass: on Windows, Mica
+// unless Acrylic was chosen; Liquid Glass (or the popover's) on macOS.
+func glassMaterial(kind string) mygo.Vibrancy {
+	if runtime.GOOS != "windows" {
+		return mygo.VibrancyGlass
+	}
+	if kind == "acrylic" {
+		return mygo.VibrancyAcrylic
+	}
+	return mygo.VibrancyMica
+}
+
+// veil is how much of the sidebar's color, or of the wash, lies over the
+// glass so its text reads: little over Mica, already calm, more over
+// Acrylic, which shows whatever is behind the window.
+func (a *App) veil() float32 {
+	if runtime.GOOS == "windows" && a.set.GlassKind == "acrylic" {
+		return 0.8
+	}
+	return 0.6
 }
 
 // alphaGradient is g made see-through by alpha.
