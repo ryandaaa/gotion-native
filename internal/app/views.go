@@ -40,9 +40,20 @@ func (a *App) View(c *ui.Context) {
 	}
 	a.shortcuts(c)
 	root := ui.Column(c).Fill()
-	if w := washByID(a.set.Wash); w.plain() {
+	w := washByID(a.set.Wash)
+	switch {
+	case c.Vibrancy():
+		// The system's glass shows through: only a veil of the sidebar's
+		// color, or of the wash, keeps the text on it legible.
+		if w.plain() {
+			c.Root().Background(p.Sidebar.Alpha(0.55))
+		} else {
+			c.Root().LinearGradient(alphaGradient(w.base(a.dark), 0.6))
+			root.LinearGradient(w.glow(a.dark))
+		}
+	case w.plain():
 		root.Background(p.Sidebar)
-	} else {
+	default:
 		// The wash under everything, and its glow on top of it.
 		c.Root().LinearGradient(w.base(a.dark))
 		root.LinearGradient(w.glow(a.dark))
@@ -979,6 +990,21 @@ func (a *App) themeButton(c *ui.Context) {
 					}
 				})
 				ui.Text(c, washByID(a.set.Wash).label).FontSize(12).TextColor(p.Muted)
+			})
+			ui.Column(c).Gap(6).Children(func() {
+				on := a.set.Glass
+				label := "Kaca (blur) di sekitar kartu"
+				ok := glassSupported()
+				sw := ui.Checkbox(c, &on, label).Disabled(!ok)
+				if sw.Changed() && ok {
+					a.set.Glass = on
+					a.saveSettings()
+					a.applyGlass()
+				}
+				if !ok {
+					ui.Text(c, "Belum didukung di Linux: sistemnya tidak menyediakan efek kaca. Tersedia di macOS dan Windows 11.").
+						FontSize(11).TextColor(p.Faint)
+				}
 			})
 		})
 	})

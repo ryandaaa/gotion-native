@@ -114,6 +114,7 @@ func New() *App {
 // Attach gives the app its window, and starts loading.
 func (a *App) Attach(w *mygo.Window) {
 	a.win = w
+	a.applyGlass()
 	if a.client == nil {
 		return
 	}
@@ -169,6 +170,7 @@ type settings struct {
 	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
 	Zoom         float32         `json:"zoom"`    // 1 is 100%
 	Wash         string          `json:"wash"`    // the color behind the cards
+	Glass        bool            `json:"glass"`   // the system's glass behind them
 	// Scroll is the first paragraph in view of each page, to come back to.
 	Scroll map[string]int `json:"scroll"`
 	// Views is how each database shows: "table" or "cards".

@@ -1,6 +1,39 @@
 package app
 
-import "github.com/egoist/mygo/ui"
+import (
+	"runtime"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+)
+
+// glassSupported reports whether the system draws a glass behind windows:
+// macOS and Windows 11 do, Linux does not.
+func glassSupported() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "windows" }
+
+// applyGlass shows or hides the system's glass behind the window, as the
+// settings ask: Liquid Glass on macOS 26 (the popover material before),
+// Acrylic on Windows 11.
+func (a *App) applyGlass() {
+	if a.win == nil || !glassSupported() {
+		return
+	}
+	if a.set.Glass {
+		a.win.SetVibrancy(mygo.VibrancyGlass)
+	} else {
+		a.win.SetVibrancy(mygo.VibrancyNone)
+	}
+}
+
+// alphaGradient is g made see-through by alpha.
+func alphaGradient(g ui.LinearGradient, alpha float32) ui.LinearGradient {
+	stops := make([]ui.GradientStop, len(g.Stops))
+	for i, st := range g.Stops {
+		stops[i] = ui.GradientStop{Color: st.Color.Alpha(alpha), At: st.At}
+	}
+	g.Stops = stops
+	return g
+}
 
 // A wash is a faint color behind the cards: a gradient down the window and
 // a glow from its top right, light and dark, with an accent of its hue.
