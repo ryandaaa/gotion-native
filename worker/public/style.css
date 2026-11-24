@@ -1,6 +1,7 @@
-/* gotion's website. The page looks like the app: the warm gray window,
-   white cards, Inter, ink for text and buttons. Blue appears once, as the
-   text caret of gotion's icon, and as the keyboard focus ring. */
+/* gotion's website. The page looks like the app: a faint wash behind white
+   cards (the app's Lavender wash), Inter, ink for text and buttons. Color
+   lives only outside the cards. Blue appears once, as the text caret of
+   gotion's icon, and as the keyboard focus ring. */
 
 @font-face { font-family: Inter; font-weight: 400; src: url(/fonts/inter-400-normal.ttf) format("truetype"); font-display: swap; }
 @font-face { font-family: Inter; font-weight: 500; src: url(/fonts/inter-500-normal.ttf) format("truetype"); font-display: swap; }
@@ -16,6 +17,10 @@
   --soft: #efeeec;
   --caret: #2563eb;
   --on-ink: #ffffff;
+  --accent: #7c5cd6;
+  --dot: rgba(29, 29, 31, 0.16);
+  --wash: linear-gradient(180deg, #ece6f6 0, #f2eaf3 520px, #f6efea 1400px, #f5f0dc 100%);
+  --glow: rgba(235, 215, 248, 0.7);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -29,6 +34,10 @@
     --soft: #2c2c2f;
     --caret: #60a5fa;
     --on-ink: #1c1c1e;
+    --accent: #a993ff;
+    --dot: rgba(237, 237, 236, 0.16);
+    --wash: linear-gradient(180deg, #1d1426 0, #211320 900px, #22170f 100%);
+    --glow: rgba(120, 70, 160, 0.28);
     color-scheme: dark;
   }
 }
@@ -40,7 +49,8 @@ html[data-lang="id"] [lang="en"]:not(html) { display: none !important; }
 * { box-sizing: border-box; }
 html { background: var(--bg); color: var(--ink); }
 body {
-  margin: 0;
+  margin: 0; min-height: 100vh; overflow-x: clip;
+  background: radial-gradient(900px 600px at 100% 0, var(--glow), transparent 70%) no-repeat, var(--wash);
   font: 400 17px/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -59,6 +69,7 @@ code, kbd { font: 500 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monos
 .brand img { width: 28px; height: 28px; }
 .top nav { margin-left: auto; display: flex; align-items: center; gap: 4px 18px; flex-wrap: wrap; font-size: 15px; }
 .top nav a { color: var(--muted); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.top nav a { transition: color .15s ease; }
 .top nav a:hover { color: var(--ink); text-decoration: underline; }
 .lang {
   font: inherit; font-size: 14px; color: var(--ink); background: var(--card);
@@ -68,6 +79,15 @@ code, kbd { font: 500 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monos
 .lang:active { background: var(--soft); }
 
 /* The first screen */
+/* The dot grid sits behind the first screen, the whole width of the
+   window, centered on it, and fades out at its edges; site.js draws it. */
+main { position: relative; isolation: isolate; }
+.dots {
+  position: absolute; z-index: -1; top: -110px; height: min(760px, 110vh); left: 50%; width: 100vw; transform: translateX(-50%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 75% at 50% 40%, #000 30%, transparent 100%);
+          mask-image: radial-gradient(ellipse 70% 75% at 50% 40%, #000 30%, transparent 100%);
+}
+.dots canvas { display: block; width: 100%; height: 100%; }
 .hero { padding: 48px 0 32px; max-width: 760px; }
 .hero h1 { font-size: clamp(36px, 7vw, 64px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 20px; }
 .caret {
@@ -85,6 +105,8 @@ code, kbd { font: 500 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monos
   font: 600 16px/1 Inter, system-ui, sans-serif; text-decoration: none; border: 1px solid transparent;
 }
 .button.primary { background: var(--ink); color: var(--on-ink); }
+.button { transition: opacity .15s ease, border-color .15s ease, background-color .15s ease, transform .15s ease; }
+.button:active { transform: scale(0.98); }
 .button.primary:hover { opacity: 0.88; }
 .button.primary:active { opacity: 0.76; }
 .button.secondary { background: var(--card); color: var(--ink); border-color: var(--line); }
@@ -96,7 +118,7 @@ code, kbd { font: 500 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monos
 
 /* The slot of the hero's picture. A React Bits component can take its
    place later; the screenshot is what shows until then. */
-.hero-visual { margin: 8px 0 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--card); }
+.hero-visual { position: relative; margin: 8px 0 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 24px 60px -24px rgba(60, 30, 110, .22); }
 .hero-visual img { display: block; width: 100%; aspect-ratio: 1280 / 800; }
 
 /* Sections */
@@ -140,7 +162,7 @@ h2 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; letter-spacing: -0.02
 }
 .platform > * { min-width: 0; }
 @media (min-width: 760px) { .platform { grid-template-columns: 200px 1fr; } }
-.platform.mine { border-color: var(--ink); }
+.platform.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .platform h3 { margin: 0; font-size: 18px; }
 .platform h3 small { display: block; font-size: 13px; font-weight: 400; color: var(--faint); }
 .platform .links { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -159,6 +181,7 @@ h2 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; letter-spacing: -0.02
 
 /* Questions people ask */
 .faq { display: grid; gap: 10px; max-width: 760px; }
+.faq summary::after { transition: transform .2s ease; }
 .faq details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0 20px; }
 .faq summary { font-weight: 600; min-height: 56px; display: flex; align-items: center; list-style: none; }
 .faq summary::-webkit-details-marker { display: none; }

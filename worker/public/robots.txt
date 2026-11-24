@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /callback
+Disallow: /refresh
+Disallow: /events
+Disallow: /webhook
+Disallow: /download/
+
+Sitemap: https://gotion.ryanda.my.id/sitemap.xml

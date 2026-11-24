@@ -1,0 +1,34 @@
+# gotion
+
+> gotion is a free desktop app for Windows, macOS and Linux that opens and edits your Notion pages and databases without a browser. It is an independent app built on Notion's public API, not made by or affiliated with Notion Labs, Inc.
+
+## What it does
+
+- Edits Notion pages like Notion: headings, lists, to-dos, quotes, code, @ mentions and the / menu. Only changed blocks are sent back to Notion.
+- Databases as tables and cards, with filters and sorts; edit cells, add rows from templates, add and rename columns.
+- Works offline: pages you opened stay on your computer, and offline edits are sent when you are back online.
+- Tabs and a two-panel split view; comments, images and file uploads.
+- Keyboard first: Ctrl+K jumps to any page, Ctrl+N makes a new one.
+- English and Bahasa Indonesia.
+
+## Privacy
+
+- The app talks to Notion directly; page content never passes through gotion's server.
+- The server only completes Notion's OAuth sign-in and relays change notices (page IDs only).
+- gotion can open only the pages the user chose on Notion's consent page, and their subpages.
+
+## Getting started
+
+1. Download the installer for your system from https://gotion.ryanda.my.id/#download (Windows x64/ARM, macOS Apple silicon/Intel, Linux .deb/.rpm/.tar.gz, or `curl -fsSL https://gotion.ryanda.my.id/download/install.sh | sh`).
+2. Open gotion and click "Sign in with Notion".
+3. Choose which pages gotion may open, then click Allow.
+4. Open a page from the sidebar and type.
+
+The installers are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper warn on first launch.
+
+## Links
+
+- Website: https://gotion.ryanda.my.id/
+- Source and releases: https://github.com/ryandaaa/gotion-native
+- Privacy policy: https://gotion.ryanda.my.id/privacy
+- Terms of use: https://gotion.ryanda.my.id/terms
