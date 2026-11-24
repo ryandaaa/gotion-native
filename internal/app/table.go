@@ -22,9 +22,9 @@ type tableView struct {
 	chosen  int
 }
 
-func (a *App) openTable(n *node) {
+func (a *App) openTable(pn *panel, n *node) {
 	t := &tableView{id: n.ID, title: n.Title, loading: true, chosen: -1}
-	a.table = t
+	pn.table = t
 	client := a.client
 	go func() {
 		ctx := context.Background()
@@ -78,10 +78,13 @@ var selectColors = map[string][2]string{
 	"default": {"#F5F5F4", "#44403C"},
 }
 
-func (a *App) tablePanel(c *ui.Context) {
+func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 	p := a.pal()
-	t := a.table
-	a.panelHeader(c, iconTable, t.title, "", "db · read-only", nil)
+	t := pn.table
+	if n := a.nodes[t.id]; n != nil && n.Title != "Memuat…" {
+		t.title = n.Title
+	}
+	a.panelHeader(c, i, iconTable, t.title, "db · read-only", nil)
 	switch {
 	case t.loading:
 		ui.Column(c).Fill().Center().Children(func() { ui.Spinner(c).Size(22, 22) })
@@ -120,9 +123,9 @@ func (a *App) tablePanel(c *ui.Context) {
 		}).Grow(1)
 		if tbl.Submitted() && t.chosen >= 0 && t.chosen < len(t.rows) {
 			r := t.rows[t.chosen]
-			n := &node{ID: r.ID, Title: nonEmpty(r.Title(), "Tanpa judul"), Kind: "page", ParentID: t.id}
+			n := &node{ID: r.ID, Title: nonEmpty(r.Title(), "Tanpa judul"), Kind: "page", ParentID: t.id, Edited: r.LastEditedTime}
 			a.nodes[r.ID] = n
-			a.open(n)
+			a.open(n, i)
 		}
 		ui.Text(c, "Enter / klik ganda untuk membuka baris sebagai halaman").FontSize(12).TextColor(p.Faint).Padding(6, 4)
 	})

@@ -33,7 +33,7 @@ const page = `[
 ]`
 
 func TestBuildThenItemsIsUnchanged(t *testing.T) {
-	text, known, extras := Build("p", blocks(t, page))
+	text, known, extras := Build("p", blocks(t, page), Shape{})
 	if len(extras) != 1 || extras[0].Title != "Sub" {
 		t.Fatalf("extras = %+v", extras)
 	}
@@ -71,7 +71,7 @@ func TestBuildThenItemsIsUnchanged(t *testing.T) {
 }
 
 func TestEditChangesOneBlock(t *testing.T) {
-	text, known, _ := Build("p", blocks(t, page))
+	text, known, _ := Build("p", blocks(t, page), Shape{})
 	d := richtext.NewDocument(text)
 	d.IdentifyParagraphs(NewID)
 	// Type at the end of the heading.
@@ -97,5 +97,44 @@ func TestStyleChangeChangesType(t *testing.T) {
 	}
 	if got := TypeOf(richtext.ParagraphStyle{Heading: 2}, "paragraph"); got != "heading_2" {
 		t.Errorf("got %s", got)
+	}
+}
+
+const togglePage = `[
+ {"object":"block","id":"t","type":"toggle","has_children":true,"toggle":{"rich_text":[{"type":"text","plain_text":"Detail","annotations":{"color":"default"}}]},
+  "children":[{"object":"block","id":"in","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"inside","annotations":{"color":"default"}}]}}]},
+ {"object":"block","id":"co","type":"callout","callout":{"icon":{"type":"emoji","emoji":"🔥"},"rich_text":[{"type":"text","plain_text":"Hot","annotations":{"color":"default"}}]}}
+]`
+
+func TestClosedToggleHidesChildrenAndDecorationsStayLocal(t *testing.T) {
+	text, known, _ := Build("p", blocks(t, togglePage), Shape{})
+	items := Items(text, known)
+	if len(items) != 2 || !known["in"].Hidden {
+		t.Fatalf("items %d, hidden %v", len(items), known["in"].Hidden)
+	}
+	for _, it := range items {
+		if known[it.ID].Hash != it.Hash {
+			t.Errorf("%s: the arrow or the emoji changed the block", it.ID)
+		}
+		b, _ := json.Marshal(it.Payload)
+		if strings.Contains(string(b), "▸") || strings.Contains(string(b), "🔥") {
+			t.Errorf("%s sends a decoration: %s", it.ID, b)
+		}
+	}
+	text, known, _ = Build("p", blocks(t, togglePage), Shape{OpenToggles: map[string]bool{"t": true}})
+	if items := Items(text, known); len(items) != 3 || known["in"].Hidden {
+		t.Errorf("open toggle: %d items", len(items))
+	}
+}
+
+func TestNewDivider(t *testing.T) {
+	d := richtext.NewDocument(richtext.TextOf(richtext.Paragraph{Style: richtext.ParagraphStyle{ID: "a"}, Runs: []richtext.Run{{Text: "x"}}}))
+	d.IdentifyParagraphs(NewID)
+	d.SetSelection(1, 1)
+	d.InsertText("\n")
+	d.Insert(Divider())
+	items := Items(d.Text(), map[string]*Known{})
+	if len(items) != 2 || items[1].Type != "divider" || len(items[1].Payload) != 0 {
+		t.Errorf("items = %+v", items)
 	}
 }

@@ -34,49 +34,47 @@ func TestShot(t *testing.T) {
 	if err := json.Unmarshal([]byte(samplePage), &blocks); err != nil {
 		t.Fatal(err)
 	}
-	text, _, extras := doc.Build("page", blocks)
+	text, _, extras := doc.Build("page", blocks, doc.Shape{OpenToggles: map[string]bool{}})
 	now := time.Now()
-	for _, dark := range []bool{false, true} {
-		a := &App{closed: map[string]bool{}, client: notion.New("x"), bot: &notion.User{}, dark: dark}
+	shots := []struct {
+		name  string
+		theme string
+		setup func(a *App)
+	}{
+		{"light", "light", nil},
+		{"dark", "dark", nil},
+		{"switcher", "light", func(a *App) { a.openSwitcher(); a.switcher.query = "a" }},
+		{"split", "light", func(a *App) {
+			a.panels[1] = &panel{id: "road", doc: richtext.NewDocument(text), title: "Roadmap Q1"}
+		}},
+	}
+	for _, shot := range shots {
+		a := &App{client: notion.New("x"), bot: &notion.User{}, panels: [2]*panel{{}, nil}}
+		a.set = settings{Theme: shot.theme, SidebarWidth: 270, Open: map[string]bool{"proj": true, "me": true}, Closed: map[string]bool{}, Toggles: map[string]bool{}}
 		a.nodes = map[string]*node{}
-		add := func(id, title, parent, kind string, ago time.Duration) {
-			a.nodes[id] = &node{ID: id, Title: title, ParentID: parent, Kind: kind, Edited: now.Add(-ago)}
+		add := func(id, title, emoji, parent, kind string, ago time.Duration) {
+			a.nodes[id] = &node{ID: id, Title: title, Emoji: emoji, ParentID: parent, Kind: kind, Edited: now.Add(-ago)}
 		}
-		add("proj", "Proyek", "", "page", time.Hour)
-		add("page", "Catatan Rapat", "proj", "page", 0)
-		add("road", "Roadmap Q1", "proj", "page", 2*time.Minute)
-		add("me", "Pribadi", "", "page", 3*time.Hour)
-		add("jur", "Jurnal Harian", "me", "page", 5*time.Minute)
-		add("ide", "Ide App", "me", "page", 26*time.Hour)
-		add("tasks", "Tasks", "", "data_source", time.Hour)
-		var pages []*notion.Page
-		_ = pages
-		// Build the groups the way setPages does.
-		for _, n := range a.nodes {
-			if n.Kind == "data_source" {
-				a.databases = append(a.databases, n)
-			} else if p := a.nodes[n.ParentID]; p != nil {
-				p.Children = append(p.Children, n)
-			} else {
-				a.groups = append(a.groups, n)
-			}
+		add("proj", "Proyek", "🚀", "", "page", time.Hour)
+		add("page", "Catatan Rapat", "📝", "proj", "page", 0)
+		add("road", "Roadmap Q1", "", "proj", "page", 2*time.Minute)
+		add("sub", "Detail teknis", "", "road", "page", 2*time.Minute)
+		add("me", "Pribadi", "", "", "page", 3*time.Hour)
+		add("jur", "Jurnal Harian", "", "me", "page", 5*time.Minute)
+		add("ide", "Ide App", "💡", "me", "page", 26*time.Hour)
+		add("tasks", "Tasks", "", "", "data_source", time.Hour)
+		a.regroup()
+		a.panels[0] = &panel{id: "page", doc: richtext.NewDocument(text), extras: extras, title: "Catatan Rapat"}
+		a.history, a.hpos = []string{"road", "page"}, 1
+		if shot.setup != nil {
+			shot.setup(a)
 		}
-		a.groups = []*node{a.nodes["proj"], a.nodes["me"]}
-		a.nodes["proj"].Children = []*node{a.nodes["page"], a.nodes["road"]}
-		a.nodes["me"].Children = []*node{a.nodes["ide"], a.nodes["jur"]}
-		a.selected = "page"
-		a.doc = richtext.NewDocument(text)
-		a.extras = extras
 		RegisterFonts()
 		tester := ui.NewTester(a.View, 1280, 800)
 		tester.Frame()
 		tester.Frame()
 		if dir := os.Getenv("SHOT"); dir != "" {
-			name := dir + "/light.png"
-			if dark {
-				name = dir + "/dark.png"
-			}
-			f, err := os.Create(name)
+			f, err := os.Create(dir + "/" + shot.name + ".png")
 			if err != nil {
 				t.Fatal(err)
 			}

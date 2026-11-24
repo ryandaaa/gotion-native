@@ -5,11 +5,17 @@ package syncer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
 
 	"gotion/internal/doc"
@@ -40,6 +46,8 @@ const (
 // Session syncs one page.
 type Session struct {
 	PageID string
+	// Page is the page as it was opened.
+	Page   *notion.Page
 	client *notion.Client
 	botID  string
 	// OnRemote is called, from the session's goroutine, with the page's
@@ -47,6 +55,8 @@ type Session struct {
 	OnRemote func(text richtext.Text, extras []doc.Extra)
 	// OnStatus is called when the status changes.
 	OnStatus func()
+	// OnError is called with a message when sending fails.
+	OnError func(msg string)
 
 	mu       sync.Mutex
 	known    map[string]*doc.Known
@@ -58,23 +68,163 @@ type Session struct {
 	seenTime time.Time
 	seenBy   string
 	cancel   context.CancelFunc
+
+	shape   doc.Shape
+	force   bool // pull on the next tick, changed or not
+	unsaved bool // pending holds edits not yet written to the cache
+	sent    bool // pending was restored from disk, and pushed since
+}
+
+// CacheDir is where pages are kept between runs; "" keeps none.
+var CacheDir string
+
+type cached struct {
+	Page   *notion.Page    `json:"page"`
+	Blocks []*notion.Block `json:"blocks"`
+}
+
+type unsent struct {
+	Text  richtext.Text         `json:"text"`
+	Known map[string]*doc.Known `json:"known"`
+}
+
+func cacheFile(id, kind string) string {
+	if CacheDir == "" {
+		return ""
+	}
+	return filepath.Join(CacheDir, id+"."+kind+".json")
+}
+
+func readJSON(path string, v any) bool {
+	if path == "" {
+		return false
+	}
+	b, err := os.ReadFile(path)
+	return err == nil && json.Unmarshal(b, v) == nil
+}
+
+func writeJSON(path string, v any) {
+	if path == "" {
+		return
+	}
+	if b, err := json.Marshal(v); err == nil {
+		os.MkdirAll(filepath.Dir(path), 0o700)
+		tmp := path + ".tmp"
+		if os.WriteFile(tmp, b, 0o600) == nil {
+			os.Rename(tmp, path)
+		}
+	}
+}
+
+// fetch loads a page, its blocks and their images.
+func fetch(ctx context.Context, client *notion.Client, pageID string) (*notion.Page, []*notion.Block, error) {
+	page, err := client.Page(ctx, pageID)
+	if err != nil {
+		return nil, nil, err
+	}
+	blocks, err := client.Tree(ctx, pageID, doc.MaxDepth)
+	if err != nil {
+		return nil, nil, err
+	}
+	writeJSON(cacheFile(pageID, "page"), cached{page, blocks})
+	return page, blocks, nil
+}
+
+// loadImages fetches the images among blocks, four at a time.
+func loadImages(ctx context.Context, blocks []*notion.Block) map[string]ui.ImageSource {
+	var urls = map[string]string{}
+	var walk func([]*notion.Block)
+	walk = func(bs []*notion.Block) {
+		for _, b := range bs {
+			if b.Type == "image" {
+				if u := b.ImageURL(); u != "" {
+					urls[b.ID] = u
+				}
+			}
+			walk(b.Children)
+		}
+	}
+	walk(blocks)
+	out := map[string]ui.ImageSource{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	client := &http.Client{Timeout: 20 * time.Second}
+	for id, u := range urls {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+			if err != nil {
+				return
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				return
+			}
+			defer resp.Body.Close()
+			data, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+			if err != nil || resp.StatusCode != 200 {
+				return
+			}
+			if img, err := ui.DecodeImage(data); err == nil {
+				mu.Lock()
+				out[id] = img
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return out
 }
 
 // Open loads a page and starts syncing it. The text it returns is for the
 // editor's document.
-func Open(ctx context.Context, client *notion.Client, botID, pageID string) (*Session, richtext.Text, []doc.Extra, error) {
-	page, err := client.Page(ctx, pageID)
+//
+// A page kept from an earlier run opens at once and is brought up to date
+// in the background; edits not sent before the app closed are sent first.
+func Open(ctx context.Context, client *notion.Client, botID, pageID string, shape doc.Shape) (*Session, richtext.Text, []doc.Extra, error) {
+	s := &Session{PageID: pageID, client: client, botID: botID, shape: shape}
+	var c cached
+	haveCache := readJSON(cacheFile(pageID, "page"), &c) && c.Page != nil
+	var u unsent
+	if readJSON(cacheFile(pageID, "unsent"), &u) && u.Known != nil {
+		s.known, s.pending, s.status, s.sent = u.Known, &u.Text, Pending, true
+		s.first, s.last = time.Now().Add(-maxDelay), time.Now().Add(-idle)
+		if haveCache {
+			s.Page, s.seenTime, s.seenBy = c.Page, c.Page.LastEditedTime, c.Page.LastEditedBy.ID
+		}
+		_, _, extras := doc.Build(pageID, c.Blocks, shape)
+		return s, u.Text, extras, nil
+	}
+	if haveCache {
+		text, known, extras := doc.Build(pageID, c.Blocks, shape)
+		s.Page, s.known, s.force = c.Page, known, true
+		s.seenTime, s.seenBy = c.Page.LastEditedTime, c.Page.LastEditedBy.ID
+		return s, text, extras, nil
+	}
+	page, blocks, err := fetch(ctx, client, pageID)
 	if err != nil {
 		return nil, richtext.Text{}, nil, err
 	}
-	blocks, err := client.Tree(ctx, pageID, doc.MaxDepth)
-	if err != nil {
-		return nil, richtext.Text{}, nil, err
-	}
-	text, known, extras := doc.Build(pageID, blocks)
-	s := &Session{PageID: pageID, client: client, botID: botID, known: known,
-		seenTime: page.LastEditedTime, seenBy: page.LastEditedBy.ID}
+	shape.Images = loadImages(ctx, blocks)
+	s.shape = shape
+	text, known, extras := doc.Build(pageID, blocks, shape)
+	s.Page, s.known = page, known
+	s.seenTime, s.seenBy = page.LastEditedTime, page.LastEditedBy.ID
 	return s, text, extras, nil
+}
+
+// Reshape shows the page again with toggles opened or closed.
+func (s *Session) Reshape(shape doc.Shape) {
+	s.mu.Lock()
+	images := s.shape.Images
+	s.shape = shape
+	s.shape.Images = images
+	s.force = true
+	s.mu.Unlock()
 }
 
 // Start runs the session until Close.
@@ -104,7 +254,7 @@ func (s *Session) Edited(text richtext.Text) {
 	if s.pending == nil {
 		s.first = now
 	}
-	s.pending, s.last = &text, now
+	s.pending, s.last, s.unsaved = &text, now, true
 	changed := s.status != Pending && s.status != Syncing
 	if changed {
 		s.status = Pending
@@ -148,12 +298,22 @@ func (s *Session) run(ctx context.Context) {
 		s.mu.Lock()
 		due := s.pending != nil && (time.Since(s.last) >= idle || time.Since(s.first) >= maxDelay)
 		quiet := s.pending == nil
+		force := s.force && quiet
+		var save *unsent
+		if s.unsaved && s.pending != nil {
+			s.unsaved = false
+			save = &unsent{Text: *s.pending, Known: s.known}
+		}
 		s.mu.Unlock()
+		if save != nil {
+			// Keep the edits on disk until Notion has them.
+			writeJSON(cacheFile(s.PageID, "unsent"), save)
+		}
 		if due {
 			s.push(ctx)
-		} else if quiet && time.Since(lastPoll) >= poll {
+		} else if force || quiet && time.Since(lastPoll) >= poll {
 			lastPoll = time.Now()
-			s.pull(ctx)
+			s.pull(ctx, force)
 		}
 	}
 }
@@ -186,7 +346,24 @@ func (s *Session) push(ctx context.Context) {
 		}
 	}
 	s.status, s.err = next, err
+	done := s.pending == nil && err == nil
+	if done && s.sent {
+		// Restored edits are in Notion: show the page as Notion has it.
+		s.sent, s.force = false, true
+	}
 	s.mu.Unlock()
+	if done {
+		if f := cacheFile(s.PageID, "unsent"); f != "" {
+			os.Remove(f)
+		}
+	}
+	if err != nil && s.OnError != nil {
+		if next == Offline {
+			s.OnError("Offline: edit disimpan di komputer dan dikirim saat koneksi kembali")
+		} else {
+			s.OnError("Gagal menyimpan ke Notion: " + err.Error())
+		}
+	}
 	s.notify()
 }
 
@@ -199,7 +376,7 @@ func (s *Session) apply(ctx context.Context, items []doc.Item) error {
 	}
 	// Blocks gone from the editor go to the trash.
 	for id, k := range s.known {
-		if present[id] {
+		if present[id] || k.Hidden {
 			continue
 		}
 		if err := s.client.DeleteBlock(ctx, k.NotionID); err != nil && !gone(err) {
@@ -300,7 +477,7 @@ func gone(err error) bool {
 }
 
 // pull brings in the page again when someone else changed it.
-func (s *Session) pull(ctx context.Context) {
+func (s *Session) pull(ctx context.Context, force bool) {
 	page, err := s.client.Page(ctx, s.PageID)
 	if err != nil {
 		if _, ok := err.(*notion.Error); !ok {
@@ -315,15 +492,30 @@ func (s *Session) pull(ctx context.Context) {
 	same := page.LastEditedTime.Equal(s.seenTime) && page.LastEditedBy.ID == s.seenBy
 	s.seenTime, s.seenBy = page.LastEditedTime, page.LastEditedBy.ID
 	s.mu.Unlock()
-	if same || page.LastEditedBy.ID == s.botID {
+	if !force && (same || page.LastEditedBy.ID == s.botID) {
 		return
 	}
-	blocks, err := s.client.Tree(ctx, s.PageID, doc.MaxDepth)
+	page, blocks, err := fetch(ctx, s.client, s.PageID)
 	if err != nil {
 		return
 	}
-	text, known, extras := doc.Build(s.PageID, blocks)
 	s.mu.Lock()
+	shape := s.shape
+	s.force = false
+	s.mu.Unlock()
+	if shape.Images == nil || force {
+		imgs := loadImages(ctx, blocks)
+		for k, v := range shape.Images {
+			if imgs[k] == nil {
+				imgs[k] = v
+			}
+		}
+		shape.Images = imgs
+	}
+	text, known, extras := doc.Build(s.PageID, blocks, shape)
+	s.mu.Lock()
+	s.shape.Images = shape.Images
+	s.Page = page
 	if s.pending != nil {
 		// The user is typing: their edits win, as the last writer.
 		s.mu.Unlock()

@@ -262,7 +262,7 @@ func (c *Client) Tree(ctx context.Context, id string, depth int) ([]*Block, erro
 		return blocks, nil
 	}
 	for _, b := range blocks {
-		if b.HasChildren && Nests(b.Type) {
+		if b.HasChildren && (Nests(b.Type) || b.Type == "table") {
 			if b.Children, err = c.Tree(ctx, b.ID, depth-1); err != nil {
 				return nil, err
 			}
@@ -370,4 +370,66 @@ func (c *Client) Query(ctx context.Context, id string, limit int) ([]*Page, erro
 		}
 		cursor = l.NextCursor
 	}
+}
+
+// TitleProperty returns the name of the page's title property.
+func (p *Page) TitleProperty() string {
+	for name, raw := range p.Properties {
+		var prop struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(raw, &prop) == nil && prop.Type == "title" {
+			return name
+		}
+	}
+	return "title"
+}
+
+func titleValue(s string) map[string]any {
+	return map[string]any{"title": []any{map[string]any{"type": "text", "text": map[string]any{"content": s}}}}
+}
+
+// CreatePage makes a page under the page parent.
+func (c *Client) CreatePage(ctx context.Context, parent, title string) (*Page, error) {
+	var p Page
+	body := map[string]any{
+		"parent":     map[string]any{"type": "page_id", "page_id": parent},
+		"properties": map[string]any{"title": titleValue(title)},
+	}
+	return &p, c.Do(ctx, "POST", "/pages", body, &p)
+}
+
+// SetTitle changes a page's title, its title property named prop.
+func (c *Client) SetTitle(ctx context.Context, id, prop, title string) error {
+	return c.Do(ctx, "PATCH", "/pages/"+id, map[string]any{"properties": map[string]any{prop: titleValue(title)}}, nil)
+}
+
+// ImageURL returns the URL of an image block's file.
+func (b *Block) ImageURL() string {
+	var p struct {
+		Type     string `json:"type"`
+		File     *struct{ URL string `json:"url"` } `json:"file"`
+		External *struct{ URL string `json:"url"` } `json:"external"`
+	}
+	json.Unmarshal(b.Payload, &p)
+	switch {
+	case p.File != nil:
+		return p.File.URL
+	case p.External != nil:
+		return p.External.URL
+	}
+	return ""
+}
+
+// Cells returns the cells of a table_row block as plain text.
+func (b *Block) Cells() []string {
+	var p struct {
+		Cells [][]RichText `json:"cells"`
+	}
+	json.Unmarshal(b.Payload, &p)
+	out := make([]string, len(p.Cells))
+	for i, c := range p.Cells {
+		out[i] = PlainText(c)
+	}
+	return out
 }

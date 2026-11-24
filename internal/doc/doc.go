@@ -24,7 +24,30 @@ const (
 	contPrefix  = "cont:"  // a later line of a block's text: cont:<id>:<n>
 	localPrefix = "local-" // a paragraph not yet in Notion
 	rawTag      = "raw:"   // a rich text item kept as Notion sent it
+	uiTag       = "ui:"    // a decoration the app adds, never sent
 )
+
+// Shape is how a page shows: which toggles are open and the images loaded.
+type Shape struct {
+	OpenToggles map[string]bool
+	Images      map[string]ui.ImageSource
+}
+
+// TextWidth is the widest images and tables draw.
+const TextWidth = 740
+
+// Divider is a new divider's paragraph, for the editor to insert.
+func Divider() richtext.Text {
+	return richtext.TextOf(richtext.Paragraph{Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Attachment: divider()}}}})
+}
+
+func isDivider(runs []richtext.Run) bool {
+	return len(runs) == 1 && runs[0].Attributes.Attachment != nil && runs[0].Attributes.Attachment.Name == "divider"
+}
+
+func decoration(text string, link string, color ui.Color) richtext.Run {
+	return richtext.Run{Text: text, Attributes: richtext.Attributes{Tag: uiTag + text, Link: link, Color: color}}
+}
 
 // NewID names a new paragraph.
 func NewID() string {
@@ -48,6 +71,9 @@ type Known struct {
 	Hash        string // of the type and payload last synced
 	// ReadOnly blocks show in place but are never written: only deleted.
 	ReadOnly bool
+	// Hidden blocks are inside a closed toggle: not in the editor, and not
+	// deleted for it.
+	Hidden bool
 }
 
 // LinkPrefix starts the links the editor shows for sub-pages and the
@@ -64,7 +90,7 @@ func divider() *richtext.Attachment {
 }
 
 // readOnlyParagraph is how a block the editor does not edit shows.
-func readOnlyParagraph(b *notion.Block, depth int) richtext.Paragraph {
+func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragraph {
 	st := richtext.ParagraphStyle{ID: b.ID, Indent: depth}
 	p := b.Text()
 	muted := richtext.Attributes{Color: ui.Hex("#78716C"), Italic: true}
@@ -80,6 +106,23 @@ func readOnlyParagraph(b *notion.Block, depth int) richtext.Paragraph {
 			title = "Tanpa judul"
 		}
 		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{{Text: "📄 "}}, link("page/", title)...)}
+	case "image":
+		if img := shape.Images[b.ID]; img != nil {
+			w, h := ui.ImageSize(img)
+			if w > TextWidth {
+				h, w = h*TextWidth/w, TextWidth
+			}
+			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
+				Attributes: richtext.Attributes{Attachment: &richtext.Attachment{Image: img, Width: w, Height: h, Name: "image"}}}}}
+		}
+		runs := link("open/", "🖼 Gambar — buka di Notion ↗")
+		runs[0].Attributes.Color = muted.Color
+		return richtext.Paragraph{Style: st, Runs: runs}
+	case "table":
+		if len(b.Children) > 0 {
+			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
+				Attributes: richtext.Attributes{Attachment: tableAttachment(b)}}}}
+		}
 	case "child_database":
 		title := strings.TrimSpace(p.Title)
 		if title == "" || title == "-" {
@@ -119,7 +162,7 @@ func StyleOf(t string) richtext.ParagraphStyle {
 		s.Heading = 2
 	case "heading_3":
 		s.Heading = 3
-	case "bulleted_list_item", "toggle":
+	case "bulleted_list_item":
 		s.List = richtext.Bullets
 	case "numbered_list_item":
 		s.List = richtext.Numbers
@@ -164,10 +207,18 @@ func sameKind(a, b richtext.ParagraphStyle) bool {
 
 // Build turns a page's blocks into the editor's text, what it knows of each
 // paragraph's block, and the blocks it does not edit.
-func Build(pageID string, blocks []*notion.Block) (richtext.Text, map[string]*Known, []Extra) {
+func Build(pageID string, blocks []*notion.Block, shape Shape) (richtext.Text, map[string]*Known, []Extra) {
 	known := map[string]*Known{}
 	var paras []richtext.Paragraph
 	var extras []Extra
+	// hide records the blocks inside a closed toggle.
+	var hide func(parent string, bs []*notion.Block)
+	hide = func(parent string, bs []*notion.Block) {
+		for _, b := range bs {
+			known[b.ID] = &Known{NotionID: b.ID, Type: b.Type, Parent: parent, HasChildren: b.HasChildren, Hidden: true, ReadOnly: true, Hash: "ro"}
+			hide(b.ID, b.Children)
+		}
+	}
 	var walk func(parent string, bs []*notion.Block, depth int)
 	walk = func(parent string, bs []*notion.Block, depth int) {
 		for _, b := range bs {
@@ -179,7 +230,7 @@ func Build(pageID string, blocks []*notion.Block) (richtext.Text, map[string]*Kn
 				if b.Type == "child_page" || b.Type == "child_database" {
 					extras = append(extras, Extra{ID: b.ID, Type: b.Type, Title: p.Title})
 				}
-				paras = append(paras, readOnlyParagraph(b, depth))
+				paras = append(paras, readOnlyParagraph(b, depth, shape))
 				known[b.ID] = &Known{NotionID: b.ID, Type: b.Type, Parent: parent, HasChildren: b.HasChildren, ReadOnly: true, Hash: "ro"}
 				continue
 			}
@@ -188,6 +239,21 @@ func Build(pageID string, blocks []*notion.Block) (richtext.Text, map[string]*Kn
 			style.Indent = depth
 			style.Checked = p.Checked
 			lines := linesOf(p.RichText)
+			open := shape.OpenToggles[b.ID]
+			switch b.Type {
+			case "toggle":
+				arrow := "▸ "
+				if open {
+					arrow = "▾ "
+				}
+				lines[0] = append([]richtext.Run{decoration(arrow, LinkPrefix+"toggle/"+b.ID, ui.Hex("#78716C"))}, lines[0]...)
+			case "callout":
+				icon := "💡 "
+				if p.Icon != nil && p.Icon.Emoji != "" {
+					icon = p.Icon.Emoji + " "
+				}
+				lines[0] = append([]richtext.Run{decoration(icon, "", ui.Color{})}, lines[0]...)
+			}
 			for i, runs := range lines {
 				st := style
 				st.ID = b.ID
@@ -198,7 +264,9 @@ func Build(pageID string, blocks []*notion.Block) (richtext.Text, map[string]*Kn
 			}
 			k := &Known{NotionID: b.ID, Type: b.Type, Parent: parent, HasChildren: b.HasChildren, Language: p.Language}
 			known[b.ID] = k
-			if depth+1 < MaxDepth && len(b.Children) > 0 {
+			if b.Type == "toggle" && !open {
+				hide(b.ID, b.Children)
+			} else if depth+1 < MaxDepth && len(b.Children) > 0 {
 				walk(b.ID, b.Children, depth+1)
 			} else if b.HasChildren && notion.Nests(b.Type) && depth+1 >= MaxDepth {
 				extras = append(extras, Extra{ID: b.ID, Type: "nested", Title: notion.PlainText(p.RichText)})
@@ -314,12 +382,19 @@ func Items(text richtext.Text, known map[string]*Known) []Item {
 			it.Type, it.Hash = k.Type, k.Hash
 			return
 		}
+		if it.Type == "divider" {
+			it.Hash = "divider"
+			return
+		}
 		var rt []any
 		for i, line := range runs {
 			if i > 0 {
 				rt = appendText(rt, "\n", richtext.Attributes{})
 			}
 			for _, r := range line {
+				if strings.HasPrefix(r.Attributes.Tag, uiTag) {
+					continue
+				}
 				if strings.HasPrefix(r.Attributes.Tag, rawTag) {
 					rt = append(rt, json.RawMessage(r.Attributes.Tag[len(rawTag):]))
 					continue
@@ -353,6 +428,9 @@ func Items(text richtext.Text, known map[string]*Known) []Item {
 			old = k.Type
 		}
 		it := Item{ID: id, Type: TypeOf(p.Style, old), Indent: p.Style.Indent, Payload: map[string]any{}}
+		if k == nil && isDivider(p.Runs) {
+			it.Type = "divider"
+		}
 		switch it.Type {
 		case "to_do":
 			it.Payload["checked"] = p.Style.Checked

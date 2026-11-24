@@ -25,9 +25,30 @@ const secretKey = "notion-token"
 
 // node is a page or data source in the sidebar.
 type node struct {
-	ID, Title, Emoji, Kind, ParentID string // Kind: "page" or "data_source"
+	ID, Title, Emoji, Kind, ParentID string // Kind: "page", "data_source" or "database"
 	Edited                           time.Time
 	Children                         []*node
+}
+
+// panel shows one page or one table.
+type panel struct {
+	id      string
+	session *syncer.Session
+	doc     *richtext.Document
+	extras  []doc.Extra
+	opening bool
+	openErr string
+	table   *tableView
+
+	// the title being edited
+	title      string
+	titleSent  string
+	titleEdit  time.Time
+	titleDirty bool
+
+	// the slash menu
+	slash slashState
+	width float32
 }
 
 // App is the state of the window.
@@ -35,6 +56,7 @@ type App struct {
 	win    *mygo.Window
 	client *notion.Client
 	bot    *notion.User
+	set    settings
 
 	// onboarding
 	tokenInput string
@@ -43,33 +65,29 @@ type App struct {
 
 	// sidebar
 	nodes     map[string]*node
-	groups    []*node // roots with their pages
+	groups    []*node
 	databases []*node
 	loading   bool
 	loadErr   string
 	query     string
-	selected  string
-	closed    map[string]bool
 
-	// the open page
-	session *syncer.Session
-	doc     *richtext.Document
-	extras  []doc.Extra
-	opening string
-	openErr string
+	// panels: the first always, the second when split
+	panels [2]*panel
+	focus  int
 
-	// the open data source
-	table *tableView
+	// history of the first panel
+	history []string
+	hpos    int
 
-	dark bool
-
-	// panelWidth is the page panel's width last frame.
-	panelWidth float32
+	switcher switcherState
+	toasts   []string
+	dark     bool
 }
 
 // New returns the app, signed in when a token is saved.
 func New() *App {
-	a := &App{closed: map[string]bool{}, dark: false}
+	a := &App{panels: [2]*panel{{}, nil}}
+	a.set = loadSettings()
 	if tok := loadToken(); tok != "" {
 		a.client = notion.New(tok)
 	}
@@ -80,16 +98,29 @@ func New() *App {
 // Attach gives the app its window, and starts loading.
 func (a *App) Attach(w *mygo.Window) {
 	a.win = w
-	if a.client != nil {
-		a.refresh()
+	if a.client == nil {
+		return
+	}
+	a.refresh()
+	if n := a.nodes[a.set.Last]; n != nil {
+		a.open(n, 0)
+	}
+	if a.set.Second != "" {
+		if n := a.nodes[a.set.Second]; n != nil {
+			a.panels[1] = &panel{}
+			a.open(n, 1)
+		}
 	}
 }
 
 // Close sends unsaved edits.
 func (a *App) Close() {
-	if a.session != nil {
-		a.session.Close()
+	for _, p := range a.panels {
+		if p != nil && p.session != nil {
+			p.session.Close()
+		}
 	}
+	a.saveSettings()
 }
 
 func (a *App) pal() palette {
@@ -99,42 +130,53 @@ func (a *App) pal() palette {
 	return light
 }
 
-// View builds the window.
-func (a *App) View(c *ui.Context) {
-	p := a.pal()
-	c.SetTheme(theme(p, a.dark))
-	if a.client == nil || a.bot == nil && a.checking {
-		a.onboarding(c)
-		return
+func (a *App) toast(msg string) {
+	a.toasts = append(a.toasts, msg)
+	if a.win != nil {
+		a.win.Invalidate()
 	}
-	ui.Row(c).Fill().AlignItems(ui.Stretch).Background(p.Sidebar).Children(func() {
-		a.sidebar(c)
-		ui.Column(c).Grow(1).MinWidth(0).Padding(10, 10, 10, 0).Children(func() {
-			ui.Column(c).Fill().Background(p.Panel).Radius(12).Clip().
-				Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.08)).Children(func() {
-				switch {
-				case a.table != nil:
-					a.tablePanel(c)
-				case a.doc != nil || a.opening != "":
-					a.pagePanel(c)
-				default:
-					a.empty(c)
-				}
-			})
-		})
-	})
 }
 
-func (a *App) empty(c *ui.Context) {
-	p := a.pal()
-	ui.Column(c).Fill().Center().Gap(8).Children(func() {
-		ui.Icon(c, iconPage).Size(28, 28).TextColor(p.Faint)
-		ui.Text(c, "Pilih halaman di sidebar").FontSize(15).TextColor(p.Muted)
-		if len(a.nodes) == 0 && !a.loading {
-			ui.Text(c, "Belum ada halaman yang terhubung. Di Notion: ••• → Connections → pilih integrasi kamu.").
-				FontSize(13).TextColor(p.Faint).MaxWidth(420).TextAlign(ui.Center)
-		}
-	})
+// --- settings ---
+
+type settings struct {
+	Theme        string          `json:"theme"` // "system", "light" or "dark"
+	SidebarWidth float32         `json:"sidebarWidth"`
+	SidebarOff   bool            `json:"sidebarOff"`
+	Open         map[string]bool `json:"open"`   // expanded pages
+	Closed       map[string]bool `json:"closed"` // collapsed groups
+	Last         string          `json:"last"`
+	Second       string          `json:"second"`
+	SplitSize    float32         `json:"splitSize"`
+	FullWidth    bool            `json:"fullWidth"`
+	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
+}
+
+func loadSettings() settings {
+	s := settings{Theme: "system", SidebarWidth: 270}
+	if b, err := os.ReadFile(filepath.Join(configDir(), "settings.json")); err == nil {
+		json.Unmarshal(b, &s)
+	}
+	if s.Open == nil {
+		s.Open = map[string]bool{}
+	}
+	if s.Closed == nil {
+		s.Closed = map[string]bool{}
+	}
+	if s.Toggles == nil {
+		s.Toggles = map[string]bool{}
+	}
+	if s.SidebarWidth < 200 {
+		s.SidebarWidth = 270
+	}
+	return s
+}
+
+func (a *App) saveSettings() {
+	if b, err := json.MarshalIndent(a.set, "", "  "); err == nil {
+		os.MkdirAll(configDir(), 0o700)
+		os.WriteFile(filepath.Join(configDir(), "settings.json"), b, 0o600)
+	}
 }
 
 // --- token ---
@@ -189,6 +231,7 @@ func deleteToken() {
 	mygo.Secrets.Service("gotion").Delete(secretKey)
 	os.Remove(filepath.Join(configDir(), "token"))
 	os.Remove(filepath.Join(configDir(), "pages.json"))
+	os.RemoveAll(filepath.Join(configDir(), "cache"))
 }
 
 // checkToken signs in with the token typed in onboarding.
@@ -220,11 +263,16 @@ func (a *App) checkToken() {
 }
 
 func (a *App) signOut() {
-	if a.session != nil {
-		a.session.Close()
+	for _, p := range a.panels {
+		if p != nil && p.session != nil {
+			p.session.Close()
+		}
 	}
 	deleteToken()
-	*a = App{win: a.win, closed: map[string]bool{}, dark: a.dark}
+	set := a.set
+	set.Last, set.Second = "", ""
+	*a = App{win: a.win, set: set, panels: [2]*panel{{}, nil}, dark: a.dark}
+	a.saveSettings()
 }
 
 func errText(err error) string {
@@ -276,19 +324,6 @@ func (a *App) refresh() {
 func (a *App) setPages(pages []*notion.Page) {
 	old := a.nodes
 	a.nodes = map[string]*node{}
-	defer func() {
-		// Keep the pages found inside opened pages that search does not list.
-		added := false
-		for id, n := range old {
-			if a.nodes[id] == nil && n.ParentID != "" && (old[n.ParentID] != nil || a.nodes[n.ParentID] != nil) {
-				a.nodes[id] = &node{ID: n.ID, Title: n.Title, Emoji: n.Emoji, Kind: n.Kind, ParentID: n.ParentID, Edited: n.Edited}
-				added = true
-			}
-		}
-		if added {
-			a.regroup()
-		}
-	}()
 	for _, p := range pages {
 		if p.InTrash {
 			continue
@@ -309,6 +344,12 @@ func (a *App) setPages(pages []*notion.Page) {
 			title = "Tanpa judul"
 		}
 		a.nodes[p.ID] = &node{ID: p.ID, Title: title, Emoji: p.Emoji(), Kind: kind, ParentID: p.Parent.ID(), Edited: p.LastEditedTime}
+	}
+	// Keep the pages found inside opened pages that search does not list.
+	for id, n := range old {
+		if a.nodes[id] == nil && n.ParentID != "" && (old[n.ParentID] != nil || a.nodes[n.ParentID] != nil) {
+			a.nodes[id] = &node{ID: n.ID, Title: n.Title, Emoji: n.Emoji, Kind: n.Kind, ParentID: n.ParentID, Edited: n.Edited}
+		}
 	}
 	a.regroup()
 }
@@ -357,34 +398,14 @@ func (a *App) loadCache() {
 	}
 }
 
-// --- opening ---
-
-func (a *App) open(n *node) {
-	if a.selected == n.ID && (a.doc != nil || a.table != nil || a.opening != "") {
-		return
-	}
-	a.selected = n.ID
-	if a.session != nil {
-		s := a.session
-		go s.Close()
-		a.session = nil
-	}
-	a.doc, a.extras, a.table, a.openErr = nil, nil, nil, ""
-	if n.Kind == "data_source" || n.Kind == "database" {
-		a.openTable(n)
-		return
-	}
-	a.openPage(n.ID)
-}
-
 // registerChildren adds a page's sub-pages and databases to the sidebar:
 // Notion's search can take a while to list pages shared just now, and
 // leaves out some it never indexes.
 func (a *App) registerChildren(pageID string, extras []doc.Extra) {
-	parent := a.nodes[pageID]
-	if parent == nil {
+	if a.nodes[pageID] == nil {
 		return
 	}
+	added := false
 	for _, x := range extras {
 		var kind string
 		switch x.Type {
@@ -395,63 +416,199 @@ func (a *App) registerChildren(pageID string, extras []doc.Extra) {
 		default:
 			continue
 		}
-		if n := a.nodes[x.ID]; n != nil {
+		if a.nodes[x.ID] != nil {
 			continue
 		}
 		title := strings.TrimSpace(x.Title)
 		if title == "" || title == "-" {
 			title = map[string]string{"page": "Tanpa judul", "database": "Database tanpa judul"}[kind]
 		}
-		n := &node{ID: x.ID, Title: title, Kind: kind, ParentID: pageID}
-		a.nodes[x.ID] = n
-		parent.Children = append(parent.Children, n)
+		a.nodes[x.ID] = &node{ID: x.ID, Title: title, Kind: kind, ParentID: pageID}
+		added = true
+	}
+	if added {
+		a.regroup()
 	}
 }
 
-// followLink opens a link clicked in the editor.
-func (a *App) followLink(url string) {
-	rest, ok := strings.CutPrefix(url, doc.LinkPrefix)
-	if !ok {
-		if ui.SafeToOpen(url) {
-			go mygo.Shell.OpenExternal(url)
+// path returns the pages from the root down to id's parent.
+func (a *App) path(id string) []*node {
+	var out []*node
+	n := a.nodes[id]
+	for n != nil && n.ParentID != "" {
+		n = a.nodes[n.ParentID]
+		if n == nil {
+			break
 		}
+		out = append([]*node{n}, out...)
+	}
+	return out
+}
+
+// --- opening ---
+
+// openID opens a page or table by ID in panel i, adding it to the tree
+// when it is not there yet.
+func (a *App) openID(id, kind, parent string, i int) {
+	n := a.nodes[id]
+	if n == nil {
+		n = &node{ID: id, Title: "Memuat…", Kind: kind, ParentID: parent}
+		a.nodes[id] = n
+		a.regroup()
+	}
+	a.open(n, i)
+}
+
+// open shows n in panel i.
+func (a *App) open(n *node, i int) {
+	if a.panels[i] == nil {
+		a.panels[i] = &panel{}
+	}
+	p := a.panels[i]
+	a.focus = i
+	if p.id == n.ID && (p.doc != nil || p.table != nil || p.opening) {
 		return
 	}
-	kind, id, _ := strings.Cut(rest, "/")
-	a.win.Update(func() {
-		switch kind {
-		case "page", "db":
-			n := a.nodes[id]
-			if n == nil {
-				k := map[string]string{"page": "page", "db": "database"}[kind]
-				n = &node{ID: id, Title: "Memuat…", Kind: k, ParentID: a.selectedParent()}
-				a.nodes[id] = n
-			}
-			a.open(n)
-		default:
-			go mygo.Shell.OpenExternal("https://www.notion.so/" + strings.ReplaceAll(id, "-", ""))
+	if i == 0 {
+		// Going somewhere new drops the pages ahead.
+		if len(a.history) > 0 {
+			a.history = a.history[:a.hpos+1]
 		}
-	})
+		if len(a.history) == 0 || a.history[len(a.history)-1] != n.ID {
+			a.history = append(a.history, n.ID)
+		}
+		a.hpos = len(a.history) - 1
+		a.set.Last = n.ID
+	} else {
+		a.set.Second = n.ID
+	}
+	// Expand the tree down to the page.
+	for _, up := range a.path(n.ID) {
+		a.set.Open[up.ID] = true
+	}
+	a.saveSettings()
+	a.show(n, i)
 }
 
-func (a *App) openPage(id string) {
-	a.opening = id
+// show loads n into panel i, closing what it showed.
+func (a *App) show(n *node, i int) {
+	p := a.panels[i]
+	if p.session != nil {
+		s := p.session
+		go s.Close()
+	}
+	p = &panel{id: n.ID}
+	a.panels[i] = p
+	if n.Kind == "data_source" || n.Kind == "database" {
+		a.openTable(p, n)
+		return
+	}
+	a.openPage(p, n.ID)
+}
+
+func (a *App) back() {
+	if a.hpos > 0 {
+		a.hpos--
+		if n := a.nodes[a.history[a.hpos]]; n != nil {
+			a.show(n, 0)
+			a.set.Last = n.ID
+		}
+	}
+}
+
+func (a *App) forward() {
+	if a.hpos < len(a.history)-1 {
+		a.hpos++
+		if n := a.nodes[a.history[a.hpos]]; n != nil {
+			a.show(n, 0)
+			a.set.Last = n.ID
+		}
+	}
+}
+
+// openBeside opens n in the second panel.
+func (a *App) openBeside(n *node) {
+	if a.panels[1] == nil {
+		a.panels[1] = &panel{}
+	}
+	a.open(n, 1)
+}
+
+func (a *App) closeSecond() {
+	if p := a.panels[1]; p != nil {
+		if p.session != nil {
+			go p.session.Close()
+		}
+		a.panels[1] = nil
+		a.focus = 0
+		a.set.Second = ""
+		a.saveSettings()
+	}
+}
+
+// followLink opens a link clicked in panel i's editor.
+func (a *App) followLink(i int) func(url string) {
+	return func(url string) {
+		rest, ok := strings.CutPrefix(url, doc.LinkPrefix)
+		if !ok {
+			if ui.SafeToOpen(url) {
+				go mygo.Shell.OpenExternal(url)
+			}
+			return
+		}
+		kind, id, _ := strings.Cut(rest, "/")
+		a.win.Update(func() {
+			p := a.panels[i]
+			parent := ""
+			if p != nil {
+				parent = p.id
+			}
+			switch kind {
+			case "page":
+				a.openID(id, "page", parent, i)
+			case "db":
+				a.openID(id, "database", parent, i)
+			case "toggle":
+				a.set.Toggles[id] = !a.set.Toggles[id]
+				a.saveSettings()
+				if p != nil && p.session != nil {
+					p.session.Reshape(a.shape())
+				}
+			default:
+				go mygo.Shell.OpenExternal("https://www.notion.so/" + strings.ReplaceAll(id, "-", ""))
+			}
+		})
+	}
+}
+
+// shape is how pages show: which toggles are open.
+func (a *App) shape() doc.Shape {
+	open := map[string]bool{}
+	for k, v := range a.set.Toggles {
+		open[k] = v
+	}
+	return doc.Shape{OpenToggles: open}
+}
+
+func (a *App) openPage(p *panel, id string) {
+	p.opening = true
 	client, bot := a.client, ""
 	if a.bot != nil {
 		bot = a.bot.ID
 	}
+	shape := a.shape()
 	go func() {
-		s, text, extras, err := syncer.Open(context.Background(), client, bot, id)
+		s, text, extras, err := syncer.Open(context.Background(), client, bot, id, shape)
 		a.win.Update(func() {
-			if a.opening != id {
+			if p.id != id || !a.has(p) {
 				if s != nil {
 					s.Close()
 				}
 				return
 			}
-			a.opening = ""
+			p.opening = false
 			if err != nil {
-				a.openErr = errText(err)
+				p.openErr = errText(err)
 				return
 			}
 			d := richtext.NewDocument(text)
@@ -459,15 +616,82 @@ func (a *App) openPage(id string) {
 			s.OnStatus = func() { a.win.Invalidate() }
 			s.OnRemote = func(text richtext.Text, extras []doc.Extra) {
 				a.win.Update(func() {
-					if a.session == s {
+					if p.session == s {
 						d.SetText(text)
-						a.extras = extras
+						p.extras = extras
+						a.registerChildren(id, extras)
+						if s.Page != nil {
+							if n := a.nodes[id]; n != nil {
+								n.Emoji = s.Page.Emoji()
+							}
+						}
 					}
 				})
 			}
-			a.session, a.doc, a.extras = s, d, extras
+			s.OnError = func(msg string) { a.win.Update(func() { a.toast(msg) }) }
+			p.session, p.doc, p.extras = s, d, extras
+			if s.Page != nil {
+				title := s.Page.Title()
+				p.title, p.titleSent = title, title
+				if n := a.nodes[id]; n != nil {
+					n.Title = nonEmpty(title, "Tanpa judul")
+					n.Emoji = s.Page.Emoji()
+				}
+			}
 			a.registerChildren(id, extras)
 			s.Start()
+		})
+	}()
+}
+
+func (a *App) has(p *panel) bool { return a.panels[0] == p || a.panels[1] == p }
+
+// sendTitle sends panel p's title when it changed.
+func (a *App) sendTitle(p *panel) {
+	if !p.titleDirty || p.session == nil || p.session.Page == nil {
+		return
+	}
+	title := strings.TrimSpace(p.title)
+	p.titleDirty = false
+	if title == p.titleSent {
+		return
+	}
+	p.titleSent = title
+	if n := a.nodes[p.id]; n != nil {
+		n.Title = nonEmpty(title, "Tanpa judul")
+	}
+	client, id, prop := a.client, p.id, p.session.Page.TitleProperty()
+	go func() {
+		if err := client.SetTitle(context.Background(), id, prop, title); err != nil {
+			a.win.Update(func() { a.toast("Judul gagal disimpan: " + errText(err)) })
+		}
+	}()
+}
+
+// newPage makes a page under parent and opens it.
+func (a *App) newPage(parent string) {
+	if parent == "" {
+		a.toast("Pilih halaman dulu: integrasi Notion hanya bisa membuat halaman di dalam halaman lain.")
+		return
+	}
+	if n := a.nodes[parent]; n != nil && n.Kind != "page" {
+		a.toast("Halaman baru hanya bisa dibuat di dalam halaman, bukan database.")
+		return
+	}
+	client := a.client
+	go func() {
+		p, err := client.CreatePage(context.Background(), parent, "")
+		a.win.Update(func() {
+			if err != nil {
+				a.toast("Gagal membuat halaman: " + errText(err))
+				return
+			}
+			n := &node{ID: p.ID, Title: "Tanpa judul", Kind: "page", ParentID: parent, Edited: time.Now()}
+			a.nodes[p.ID] = n
+			a.regroup()
+			a.set.Open[parent] = true
+			a.open(n, a.focus)
+			a.toast("Halaman baru dibuat")
 		})
 	}()
 }

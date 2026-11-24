@@ -52,7 +52,7 @@ func TestPushSendsOnlyChanges(t *testing.T) {
 	defer srv.Close()
 	c := notion.New("t")
 	c.Base = srv.URL + "/v1"
-	s, text, _, err := Open(context.Background(), c, "bot", "p")
+	s, text, _, err := Open(context.Background(), c, "bot", "p", doc.Shape{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,4 +84,38 @@ func TestPushSendsOnlyChanges(t *testing.T) {
 	}
 	_ = json.Valid
 	_ = time.Second
+}
+
+func TestUnsentEditsSurviveARestart(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	CacheDir = t.TempDir()
+	defer func() { CacheDir = "" }()
+	c := notion.New("t")
+	c.Base = srv.URL + "/v1"
+	s, text, _, err := Open(context.Background(), c, "bot", "p", doc.Shape{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := richtext.NewDocument(text)
+	d.SetSelection(3, 3)
+	d.InsertText("!")
+	s.Edited(d.Text())
+	// The run loop writes the edits to disk before sending them; quit first.
+	s.Start()
+	time.Sleep(400 * time.Millisecond)
+	s.cancel()
+	// A new run: the page opens from disk with the edit, and sends it.
+	s2, text2, _, err := Open(context.Background(), c, "bot", "p", doc.Shape{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := s2.Status(); st != Pending || !strings.Contains(text2.PlainText(), "one!") {
+		t.Fatalf("status %v text %q", st, text2.PlainText())
+	}
+	s2.push(context.Background())
+	if !strings.Contains(strings.Join(f.writes, "\n"), `"content":"one!"`) {
+		t.Errorf("writes %v", f.writes)
+	}
 }
