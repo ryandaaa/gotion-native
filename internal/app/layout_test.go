@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"fmt"
 	"encoding/json"
 	"image/png"
 	"os"
@@ -231,4 +232,19 @@ func TestWashes(t *testing.T) {
 			snapshot(t, tester, "wash-"+w.id+"-"+theme)
 		}
 	}
+}
+
+func TestSidebarScrollShot(t *testing.T) {
+	a := tableApp(t)
+	for i := 0; i < 60; i++ {
+		id := fmt.Sprintf("p%02d", i)
+		a.nodes[id] = &node{ID: id, Title: "Halaman " + id, Kind: "page", ParentID: "ppsi"}
+	}
+	a.set.Open["ppsi"] = true
+	a.regroup()
+	tester := ui.NewTester(a.View, 1000, 500)
+	tester.Frame()
+	tester.Move(150, 300)
+	tester.Frame()
+	snapshot(t, tester, "sidebar-scroll")
 }

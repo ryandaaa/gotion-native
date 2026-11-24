@@ -363,7 +363,7 @@ func (a *App) sidebar(c *ui.Context) {
 			default:
 				a.item(c, r.n, r.depth)
 			}
-		}).Grow(1).Label("Halaman")
+		}).Grow(1).Label("Halaman").ScrollbarStyle(a.thinScrollbar())
 		ui.Row(c).AlignItems(ui.Center).Gap(2).Padding(6, 4, 0, 4).Children(func() {
 			if iconButton(c, p, iconSettings, "Pengaturan (Ctrl+,)") {
 				a.openSettings("")
@@ -1019,4 +1019,12 @@ func (a *App) themeButton(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// thinScrollbar is a quiet scroll bar: a hairline thumb, no track, that
+// thickens a little under the pointer.
+func (a *App) thinScrollbar() ui.ScrollbarStyle {
+	p := a.pal()
+	return ui.ScrollbarStyle{TrackWidth: 8, ThumbWidth: 3, Radius: 2, MinLength: 28,
+		Thumb: p.Faint.Alpha(0.28), Hover: p.Faint.Alpha(0.5), Active: p.Faint.Alpha(0.65)}
 }
