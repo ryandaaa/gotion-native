@@ -6,7 +6,7 @@ routes = [{ pattern = "gotion.ryanda.my.id", custom_domain = true }]
 
 # Where the website's download links find the releases.
 [vars]
-GITHUB_REPO = "ryandaaa/gotion"
+GITHUB_REPO = "ryandaaa/gotion-native"
 
 # The webhook's verification token, the events kept per workspace, and
 # which workspace a token belongs to (by its hash).
