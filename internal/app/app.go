@@ -155,6 +155,7 @@ type settings struct {
 	SplitSize    float32         `json:"splitSize"`
 	FullWidth    bool            `json:"fullWidth"`
 	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
+	Zoom         float32         `json:"zoom"`    // 1 is 100%
 }
 
 func loadSettings() settings {
@@ -173,6 +174,9 @@ func loadSettings() settings {
 	}
 	if s.SidebarWidth < 200 {
 		s.SidebarWidth = 270
+	}
+	if s.Zoom < zooms[0] || s.Zoom > zooms[len(zooms)-1] {
+		s.Zoom = 1
 	}
 	return s
 }

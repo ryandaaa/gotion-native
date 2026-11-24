@@ -22,6 +22,7 @@ func (a *App) View(c *ui.Context) {
 	a.dark = a.set.Theme == "dark" || a.set.Theme != "light" && sysDark
 	p := a.pal()
 	c.SetTheme(theme(p, a.dark))
+	c.SetZoom(a.set.Zoom)
 	for _, m := range a.toasts {
 		c.Toast(m)
 	}
@@ -74,7 +75,40 @@ func (a *App) shortcuts(c *ui.Context) {
 		a.cycleTheme()
 	case c.Shortcut(ui.Cmd, ui.KeyR):
 		a.refresh()
+	case c.Shortcut(ui.Cmd, ui.KeyEqual), c.Shortcut(ui.Cmd|ui.Shift, ui.KeyEqual):
+		a.zoom(+1)
+	case c.Shortcut(ui.Cmd, ui.KeyMinus):
+		a.zoom(-1)
+	case c.Shortcut(ui.Cmd, ui.Key0):
+		a.zoom(0)
 	}
+}
+
+// zooms are the steps Ctrl+= and Ctrl+- go through, as a browser's.
+var zooms = []float32{0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5}
+
+// zoom steps the zoom in (dir 1) or out (-1), or back to 100% (0).
+func (a *App) zoom(dir int) {
+	z := float32(1)
+	if dir != 0 {
+		i := 0
+		for i < len(zooms) && zooms[i] < a.set.Zoom-0.001 {
+			i++
+		}
+		// i is the step at or just above the zoom now.
+		if dir > 0 {
+			if i < len(zooms) && zooms[i] <= a.set.Zoom+0.001 {
+				i++
+			}
+			i = min(i, len(zooms)-1)
+		} else {
+			i = max(i-1, 0)
+		}
+		z = zooms[i]
+	}
+	a.set.Zoom = z
+	a.saveSettings()
+	a.toast(fmt.Sprintf("Zoom %d%%", int(z*100+0.5)))
 }
 
 func (a *App) cycleTheme() {
@@ -121,6 +155,16 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 		ui.Box(c).Grow(1)
 		if a.loading {
 			ui.Spinner(c).Size(14, 14)
+		}
+		if z := a.set.Zoom; z < 0.99 || z > 1.01 {
+			b := ui.Text(c.Key("zoom"), fmt.Sprintf("%d%%", int(z*100+0.5))).FontSize(12).TextColor(p.Muted).
+				Padding(3, 8).Radius(6).Cursor(ui.CursorPointer).Tooltip("Kembali ke 100% (Ctrl+0)")
+			if b.Hovered() {
+				b.Background(p.Hover)
+			}
+			if b.Clicked() {
+				a.zoom(0)
+			}
 		}
 		if iconButton(c, p, iconRefresh, "Muat ulang (Ctrl+R)") {
 			a.refresh()

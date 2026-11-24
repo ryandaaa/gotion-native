@@ -138,3 +138,40 @@ func TestTableFitsANarrowPanel(t *testing.T) {
 		}
 	}
 }
+
+func TestZoomSteps(t *testing.T) {
+	a := &App{set: settings{Zoom: 1}}
+	for _, want := range []float32{1.1, 1.25, 1.5} {
+		a.zoom(+1)
+		if a.set.Zoom != want {
+			t.Fatalf("zoom in: %v, want %v", a.set.Zoom, want)
+		}
+	}
+	a.zoom(-1)
+	if a.set.Zoom != 1.25 {
+		t.Errorf("zoom out: %v", a.set.Zoom)
+	}
+	a.set.Zoom = 1.2 // between steps
+	if a.zoom(+1); a.set.Zoom != 1.25 {
+		t.Errorf("from 120%%: %v", a.set.Zoom)
+	}
+	a.zoom(0)
+	if a.set.Zoom != 1 {
+		t.Errorf("reset: %v", a.set.Zoom)
+	}
+	for i := 0; i < 20; i++ {
+		a.zoom(+1)
+	}
+	if a.set.Zoom != zooms[len(zooms)-1] {
+		t.Errorf("max: %v", a.set.Zoom)
+	}
+}
+
+func TestZoomedWindow(t *testing.T) {
+	a := tableApp(t)
+	a.set.Zoom = 1.25
+	tester := ui.NewTester(a.View, 1366, 768)
+	tester.Frame()
+	tester.Frame()
+	snapshot(t, tester, "zoom-125")
+}
