@@ -531,3 +531,25 @@ func (a *App) importMarkdownDialog(i int) {
 		a.update(func() { a.importMarkdown(parent, paths) })
 	}()
 }
+
+// newDatabase makes a database in panel pn's page (Notion puts it at the
+// page's end) and shows it in the page and the sidebar.
+func (a *App) newDatabase(pn *panel) {
+	client, parent := a.client, pn.id
+	go func() {
+		db, err := client.CreateDatabase(context.Background(), parent, "Database baru")
+		a.update(func() {
+			if err != nil {
+				a.toast("Gagal membuat database: " + errText(err))
+				return
+			}
+			a.nodes[db.ID] = &node{ID: db.ID, Title: "Database baru", Kind: "database", ParentID: parent, Edited: time.Now()}
+			a.regroup()
+			a.set.Open[parent] = true
+			if pn.session != nil {
+				pn.session.Reshape(a.shape(pn))
+			}
+			a.toast("Database dibuat di akhir halaman")
+		})
+	}()
+}

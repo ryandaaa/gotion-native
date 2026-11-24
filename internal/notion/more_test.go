@@ -42,6 +42,7 @@ func TestMoreEndpoints(t *testing.T) {
 	c.TrashPage(ctx, "p1", true)
 	c.SetIcon(ctx, "p1", "🔥")
 	c.CreatePageMarkdown(ctx, "p2", "Impor", "# Hai\nisi")
+	c.CreateDatabase(ctx, "p2", "Tugas")
 	if len(us) != 1 || md != "# Judul" {
 		t.Errorf("users %v md %q", us, md)
 	}
@@ -55,6 +56,8 @@ func TestMoreEndpoints(t *testing.T) {
 		`PATCH /pages/p1 {"icon":{"emoji":"🔥","type":"emoji"}}`,
 		`"markdown":"# Hai\nisi","markdown_version":"v2"`,
 		"GET /pages/p1/markdown?markdown_version=v2",
+		`POST /databases {"initial_data_source":{"properties":{"Beres":{"checkbox":{},"type":"checkbox"}`,
+		`"parent":{"page_id":"p2","type":"page_id"},"title":[{"text":{"content":"Tugas"}}]}`,
 	} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing %s in\n%s", want, all)

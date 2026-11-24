@@ -39,6 +39,7 @@ var commands = []command{
 		pn.doc.InsertText("\n")
 	}},
 	{"Halaman", "Sub-halaman baru", "page halaman", func(a *App, pn *panel) { a.newPage(pn.id) }},
+	{"Database", "Tabel database baru", "database tabel table db", func(a *App, pn *panel) { a.newDatabase(pn) }},
 }
 
 // plain makes the paragraph at the caret a body paragraph.

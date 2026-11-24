@@ -185,3 +185,22 @@ func (c *Client) SetCover(ctx context.Context, id, url, uploadID string) error {
 	}
 	return c.Do(ctx, "PATCH", "/pages/"+id, map[string]any{"cover": cover}, nil)
 }
+
+// CreateDatabase makes a database under a page, its first data source with
+// a starting set of columns: a title, a select of how far along, a date
+// and a check box.
+func (c *Client) CreateDatabase(ctx context.Context, parent, title string) (*Database, error) {
+	opt := func(name, color string) map[string]string { return map[string]string{"name": name, "color": color} }
+	body := map[string]any{
+		"parent": map[string]any{"type": "page_id", "page_id": parent},
+		"title":  []any{map[string]any{"text": map[string]any{"content": title}}},
+		"initial_data_source": map[string]any{"properties": map[string]any{
+			"Nama":    map[string]any{"type": "title", "title": map[string]any{}},
+			"Status":  map[string]any{"type": "select", "select": map[string]any{"options": []any{opt("Belum", "gray"), opt("Berjalan", "yellow"), opt("Selesai", "green")}}},
+			"Tanggal": map[string]any{"type": "date", "date": map[string]any{}},
+			"Beres":   map[string]any{"type": "checkbox", "checkbox": map[string]any{}},
+		}},
+	}
+	var d Database
+	return &d, c.Do(ctx, "POST", "/databases", body, &d)
+}
