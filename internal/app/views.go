@@ -286,7 +286,7 @@ func (a *App) onboarding(c *ui.Context) {
 						ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 							ui.Spinner(c).Size(16, 16)
 							ui.Text(c, "Lanjutkan login di browser…").FontSize(14).TextColor(p.Muted).Grow(1)
-							if ui.Button(c, "Batal").Border(1, p.Faint.Alpha(0.5)).Clicked() {
+							if a.btn(c, "Batal", nil, false, false) {
 								a.cancelOAuth()
 							}
 						})
@@ -311,7 +311,7 @@ func (a *App) onboarding(c *ui.Context) {
 				ui.Text(c, "Tempel Internal Integration Secret").FontSize(14)
 				ui.Row(c).Gap(8).Children(func() {
 					in := ui.TextInput(c, &a.tokenInput).Password().Placeholder("ntn_…").Grow(1).Label("Token").AutoFocus().Border(1, p.Faint.Alpha(0.5))
-					if (in.Submitted() || ui.Button(c, "Cek").Border(1, p.Faint.Alpha(0.5)).Disabled(a.checking).Clicked()) && !a.checking {
+					if (in.Submitted() || a.btn(c, "Cek", nil, false, a.checking)) && !a.checking {
 						a.checkToken()
 					}
 				})
@@ -385,7 +385,7 @@ func (a *App) sidebar(c *ui.Context) {
 			default:
 				a.item(c, r.n, r.depth)
 			}
-		}).Grow(1).Label("Halaman").ScrollbarStyle(a.thinScrollbar())
+		}).Grow(1).Label("Halaman").ScrollbarStyle(a.thinScrollbar()).Padding(0, 10, 0, 0)
 		ui.Row(c).AlignItems(ui.Center).Gap(2).Padding(6, 4, 0, 4).Children(func() {
 			if iconButton(c, p, iconSettings, "Pengaturan (Ctrl+,)") {
 				a.openSettings("")
@@ -777,7 +777,7 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	if pn.openErr != "" {
 		ui.Column(c).Fill().Center().Gap(10).Children(func() {
 			ui.Text(c, "Gagal membuka: "+pn.openErr).FontSize(14).TextColor(c.Theme().Danger)
-			if ui.Button(c, "Coba lagi").Clicked() {
+			if a.btn(c, "Coba lagi", iconRefresh, false, false) {
 				if n != nil {
 					a.show(n, i)
 				}

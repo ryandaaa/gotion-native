@@ -226,7 +226,7 @@ func (a *App) sortEditor(c *ui.Context, t *tableView) {
 			q.sortProp, q.sortDesc = prop, dir == "desc"
 			a.requery(t)
 		}
-		if q.sortProp != "" && ui.Button(c, "Hapus urutan").Clicked() {
+		if q.sortProp != "" && a.btn(c, "Hapus urutan", nil, false, false) {
 			q.sortProp = ""
 			a.requery(t)
 		}

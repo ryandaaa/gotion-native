@@ -164,14 +164,14 @@ func (a *App) appearanceSection(c *ui.Context) {
 	ui.Column(c).Gap(8).Children(func() {
 		ui.Text(c, "Zoom").FontSize(12).FontWeight(600).TextColor(p.Faint)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			if ui.Button(c, "−").Width(36).Clicked() {
+			if a.btn(c, "−", nil, false, false) {
 				a.zoom(-1)
 			}
 			ui.Text(c, fmt.Sprintf("%d%%", int(a.set.Zoom*100+0.5))).FontSize(14).Width(56).TextAlign(ui.Center)
-			if ui.Button(c, "+").Width(36).Clicked() {
+			if a.btn(c, "+", nil, false, false) {
 				a.zoom(+1)
 			}
-			if ui.Button(c, "Atur ulang").Disabled(a.set.Zoom > 0.99 && a.set.Zoom < 1.01).Clicked() {
+			if a.btn(c, "Atur ulang", nil, false, a.set.Zoom > 0.99 && a.set.Zoom < 1.01) {
 				a.zoom(0)
 			}
 			ui.Text(c, "Ctrl+= · Ctrl+- · Ctrl+0").FontSize(12).TextColor(p.Faint)
@@ -210,7 +210,7 @@ func (a *App) accountSection(c *ui.Context) {
 	})
 	a.members(c)
 	ui.Column(c).Gap(6).Children(func() {
-		if ui.Button(c, "Hapus cache halaman").AlignSelf(ui.Start).Clicked() {
+		if a.btnRow(c, func() bool { return a.btn(c, "Hapus cache halaman", iconTrash, false, false) }) {
 			os.RemoveAll(filepath.Join(configDir(), "cache"))
 			a.toast("Cache dihapus: halaman dimuat ulang dari Notion saat dibuka")
 		}
@@ -218,7 +218,7 @@ func (a *App) accountSection(c *ui.Context) {
 	})
 	ui.Column(c).Gap(8).Children(func() {
 		if !s.confirm {
-			if ui.Button(c, "Keluar").TextColor(c.Theme().Danger).AlignSelf(ui.Start).Clicked() {
+			if a.btnRow(c, func() bool { return a.btn(c, "Keluar", iconLogout, true, false) }) {
 				s.confirm = true
 			}
 			ui.Text(c, "Menghapus token dan salinan halaman dari komputer ini. Halamanmu di Notion tidak berubah.").FontSize(12).TextColor(p.Faint)
@@ -230,7 +230,7 @@ func (a *App) accountSection(c *ui.Context) {
 				s.open = false
 				a.signOut()
 			}
-			if ui.Button(c, "Batal").Clicked() {
+			if a.btn(c, "Batal", nil, false, false) {
 				s.confirm = false
 			}
 		})

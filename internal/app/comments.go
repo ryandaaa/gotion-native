@@ -190,7 +190,7 @@ func (a *App) discussion(c *ui.Context, pn *panel, d []notion.Comment) {
 			if ui.PrimaryButton(c, "Kirim").Disabled(cs.sending || strings.TrimSpace(cs.reply) == "").Clicked() || in.Shortcut(ui.Cmd, ui.KeyEnter) {
 				a.sendComment(pn, id, cs.reply)
 			}
-			if ui.Button(c, "Batal").Clicked() {
+			if a.btn(c, "Batal", nil, false, false) {
 				cs.replyTo = ""
 			}
 		})

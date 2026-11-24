@@ -109,3 +109,28 @@ func TestTrashRestoreMoveIcon(t *testing.T) {
 		t.Error("icon not shown at once")
 	}
 }
+
+func TestLibraryDarkShot(t *testing.T) {
+	a := tabsApp(t)
+	a.set.Theme = "dark"
+	for i := 0; i < 40; i++ {
+		id := "x" + itoa(i)
+		a.nodes[id] = &node{ID: id, Title: "Catatan panjang nomor " + itoa(i), Kind: "page", ParentID: "satu", Edited: time.Now().Add(-time.Duration(i) * 24 * time.Hour)}
+	}
+	a.set.Open["satu"] = true
+	a.regroup()
+	a.open(a.special(libraryID), 0)
+	tester := ui.NewTester(a.View, 1200, 600)
+	tester.Frame()
+	tester.Move(700, 400)
+	tester.Advance(time.Second)
+	snapshot(t, tester, "library-dark")
+	tester.Move(150, 400)
+	tester.Frame()
+	tester.Advance(300 * time.Millisecond)
+	snapshot(t, tester, "sidebar-dark-hover")
+	a.openSettings("akun")
+	tester.Frame()
+	tester.Advance(time.Second)
+	snapshot(t, tester, "settings-akun-dark")
+}

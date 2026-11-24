@@ -84,7 +84,7 @@ func (a *App) libraryPanel(c *ui.Context, i int) {
 			ui.Text(c, "Pustaka").FontSize(26).FontWeight(700)
 			ui.Text(c, itoa(len(items))+" item").FontSize(13).TextColor(p.Faint)
 			ui.Box(c).Grow(1)
-			if ui.Button(c, "Impor Markdown…").Clicked() {
+			if a.btn(c, "Impor Markdown", iconImport, false, false) {
 				a.importMarkdownDialog(i)
 			}
 		})
@@ -98,7 +98,8 @@ func (a *App) libraryPanel(c *ui.Context, i int) {
 			a.segmented(c, "lib-order", &l.order, []struct{ id, label string }{{"edited", "Terakhir diubah"}, {"title", "Judul"}})
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).ScrollbarStyle(a.thinScrollbar()).Children(func() {
-			ui.Column(c).Gap(1).Padding(0, 0, 24, 0).Children(func() {
+			// Room on the right: the scroll bar runs beside the rows, not on them.
+			ui.Column(c).Gap(1).Padding(0, 14, 24, 0).Children(func() {
 				if len(items) == 0 {
 					ui.Text(c, "Tidak ada yang cocok.").FontSize(14).TextColor(p.Faint).Padding(12)
 				}
@@ -178,7 +179,7 @@ func (a *App) trashPanel(c *ui.Context, i int) {
 						}
 						ui.Text(c, nonEmpty(t.Title, "Tanpa judul")).FontSize(14).Grow(1).SingleLine().MinWidth(0)
 						ui.Text(c, "Dibuang "+ago(t.When)).FontSize(12).TextColor(p.Faint)
-						if ui.Button(c, "Pulihkan").Clicked() {
+						if a.btn(c, "Pulihkan", iconRestore, false, false) {
 							a.restorePage(t)
 						}
 					})
@@ -329,7 +330,7 @@ func (a *App) pageMenuItems(c *ui.Context, i int, pn *panel) {
 			m.open = false
 			a.trashPage(pn.id)
 		}
-		if ui.Button(c, "Batal").Clicked() {
+		if a.btn(c, "Batal", nil, false, false) {
 			m.confirm = false
 		}
 	})

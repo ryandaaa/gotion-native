@@ -206,7 +206,7 @@ func (a *App) addRow(c *ui.Context, i int, t *tableView) {
 		}
 		if n.busy {
 			ui.Spinner(c).Size(14, 14)
-		} else if ui.Button(c, "Batal").Clicked() {
+		} else if a.btn(c, "Batal", nil, false, false) {
 			*n = newRow{}
 		}
 	})
