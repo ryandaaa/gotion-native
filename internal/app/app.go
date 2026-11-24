@@ -133,7 +133,7 @@ type App struct {
 
 // New returns the app, signed in when a token is saved.
 func New() *App {
-	a := &App{panels: [2]*panel{{}, nil}}
+	a := &App{panels: [2]*panel{{}, nil}, nodes: map[string]*node{}}
 	a.set = loadSettings()
 	a.applyLanguage()
 	if raw := loadToken(); raw != "" {
@@ -333,7 +333,7 @@ func (a *App) signOut() {
 	deleteToken()
 	set := a.set
 	set.Last, set.Second = "", ""
-	*a = App{win: a.win, set: set, panels: [2]*panel{{}, nil}, dark: a.dark}
+	*a = App{win: a.win, set: set, panels: [2]*panel{{}, nil}, dark: a.dark, nodes: map[string]*node{}}
 	a.saveSettings()
 }
 

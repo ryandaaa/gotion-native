@@ -34,6 +34,9 @@ func (a *App) special(id string) *node {
 		trashID:   {ID: trashID, Title: tr.T("Sampah"), Kind: "trash"},
 	}[id]
 	if n != nil {
+		if a.nodes == nil {
+			a.nodes = map[string]*node{} // no page known yet: no cache, not loaded
+		}
 		a.nodes[id] = n
 	}
 	return n
