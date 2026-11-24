@@ -239,34 +239,63 @@ const ASSETS = {
 };
 
 // The newest release, asked of GitHub at most every 5 minutes per Worker.
-let latest = { at: 0, release: null };
+// GitHub allows 60 unauthenticated requests an hour per IP, and Workers
+// share IPs, so it often refuses: the last release it gave is kept (here
+// and in KV, for a Worker that just started) and used meanwhile, and a
+// refusal is asked again after 30 seconds, not 5 minutes.
+const FRESH = 5 * 60 * 1000;
+const RETRY = 30 * 1000;
+let latest = { at: 0, failedAt: 0, release: null, none: false };
 
-async function newestRelease(repo) {
-  if (Date.now() - latest.at < 5 * 60 * 1000) return latest.release;
-  const res = await fetch("https://api.github.com/repos/" + repo + "/releases/latest", {
-    headers: { "User-Agent": "gotion-website", Accept: "application/vnd.github+json" },
-  });
-  const release = res.ok ? await res.json() : null;
-  latest = { at: Date.now(), release };
-  return release;
+async function newestRelease(repo, env) {
+  const now = Date.now();
+  if (now - latest.at < FRESH || now - latest.failedAt < RETRY) return latest;
+  const headers = { "User-Agent": "gotion-website", Accept: "application/vnd.github+json" };
+  if (env.GITHUB_TOKEN) headers.Authorization = "Bearer " + env.GITHUB_TOKEN;
+  let res = null;
+  try {
+    res = await fetch("https://api.github.com/repos/" + repo + "/releases/latest", { headers });
+  } catch {}
+  if (res && res.ok) {
+    const r = await res.json();
+    const release = { id: r.id, assets: (r.assets || []).map((a) => ({ name: a.name, browser_download_url: a.browser_download_url })) };
+    if (!latest.release || latest.release.id !== release.id) {
+      try { await env.EVENTS?.put("release:latest", JSON.stringify(release)); } catch {}
+    }
+    latest = { at: now, failedAt: 0, release, none: false };
+  } else if (res && res.status === 404) {
+    latest = { at: 0, failedAt: now, release: null, none: true }; // nothing published yet
+  } else {
+    latest.failedAt = now;
+    if (!latest.release) {
+      try {
+        const kept = await env.EVENTS?.get("release:latest");
+        if (kept) latest.release = JSON.parse(kept);
+      } catch {}
+    }
+  }
+  return latest;
 }
 
 // download sends the visitor to the newest release's file, or tells them
-// there is none yet.
+// there is none yet. When GitHub can't be asked and no release is known,
+// its releases page is the next best place.
 async function download(url, env) {
   const repo = env.GITHUB_REPO || "";
   const kind = url.pathname.slice("/download/".length);
+  const releases = "https://github.com/" + repo + "/releases";
   if (kind === "releases") {
-    const release = repo && (await newestRelease(repo));
-    if (release) return Response.redirect("https://github.com/" + repo + "/releases", 302);
+    const { release, none } = repo ? await newestRelease(repo, env) : { none: true };
+    if (release || !none) return Response.redirect(releases, 302);
     return notYet();
   }
   const pattern = ASSETS[kind];
   if (!pattern) return page("Not found · Tidak ditemukan", "No such download. · Unduhan itu tidak ada.", 404);
-  const release = repo && (await newestRelease(repo));
-  const asset = release && (release.assets || []).find((a) => pattern.test(a.name));
-  if (!asset) return notYet();
-  return Response.redirect(asset.browser_download_url, 302);
+  const { release, none } = repo ? await newestRelease(repo, env) : { none: true };
+  const asset = release && release.assets.find((a) => pattern.test(a.name));
+  if (asset) return Response.redirect(asset.browser_download_url, 302);
+  if (!release && !none) return Response.redirect(releases + "/latest", 302);
+  return notYet();
 }
 
 function notYet() {

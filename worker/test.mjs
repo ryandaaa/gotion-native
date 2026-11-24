@@ -13,9 +13,11 @@ let lastToken;
 let meCalls = 0;
 let releases = 0;
 let release = null; // none published yet
+let limited = false; // GitHub refusing: its rate limit
 globalThis.fetch = async (url, init) => {
   if (url === "https://api.github.com/repos/me/gotion/releases/latest") {
     releases++;
+    if (limited) return Response.json({ message: "API rate limit exceeded" }, { status: 403 });
     return release ? Response.json(release) : Response.json({ message: "Not Found" }, { status: 404 });
   }
   if (url === "https://api.notion.com/v1/users/me") {
@@ -127,13 +129,14 @@ release = {
   ],
 };
 r = await call("/download/windows");
-assert.equal(r.status, 404, "the answer of a few minutes ago still holds");
+assert.equal(r.status, 404, "the answer of a few seconds ago still holds");
 const realNow = Date.now;
-Date.now = () => realNow() + 6 * 60 * 1000; // five minutes later
-for (const [kind, where] of Object.entries({
+Date.now = () => realNow() + 31 * 1000; // half a minute later: asked again
+const urls = {
   windows: "https://dl/win64", "windows-arm": "https://dl/winarm", mac: "https://dl/mac", "mac-intel": "https://dl/macintel",
   "linux-deb": "https://dl/deb", "linux-rpm": "https://dl/rpm", "linux-tar": "https://dl/tar", "install.sh": "https://dl/install",
-})) {
+};
+for (const [kind, where] of Object.entries(urls)) {
   r = await call("/download/" + kind);
   assert.equal(r.status, 302, kind);
   assert.equal(r.headers.get("Location"), where, kind);
@@ -141,5 +144,25 @@ for (const [kind, where] of Object.entries({
 r = await call("/download/releases");
 assert.equal(r.headers.get("Location"), "https://github.com/me/gotion/releases");
 assert.equal(releases, 2, "GitHub is asked once per five minutes");
+
+// GitHub's rate limit: the release known before keeps the links working.
+limited = true;
+Date.now = () => realNow() + 7 * 60 * 1000;
+r = await call("/download/mac");
+assert.equal(r.headers.get("Location"), "https://dl/mac", "a refusal keeps the known release");
+assert.equal(releases, 3);
+await call("/download/mac");
+assert.equal(releases, 3, "a refusal is asked again after half a minute, not at once");
+
+// A Worker that just started, while GitHub refuses: the release kept in KV.
+const fresh = (await import("./src/index.js?cold")).default;
+r = await fresh.fetch(new Request("https://w.example/download/linux-deb"), env);
+assert.equal(r.headers.get("Location"), "https://dl/deb", "kept in KV");
+// ...and with nothing kept either: GitHub's releases page, not "coming soon".
+const bare = (await import("./src/index.js?bare")).default;
+r = await bare.fetch(new Request("https://w.example/download/windows"), { ...env, EVENTS: { get: async () => null, put: async () => {} } });
+assert.equal(r.status, 302);
+assert.equal(r.headers.get("Location"), "https://github.com/me/gotion/releases/latest");
+Date.now = realNow;
 
 console.log("worker: all checks passed");
