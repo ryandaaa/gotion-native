@@ -271,7 +271,21 @@ func (a *App) refresh() {
 }
 
 func (a *App) setPages(pages []*notion.Page) {
+	old := a.nodes
 	a.nodes = map[string]*node{}
+	defer func() {
+		// Keep the pages found inside opened pages that search does not list.
+		added := false
+		for id, n := range old {
+			if a.nodes[id] == nil && n.ParentID != "" && (old[n.ParentID] != nil || a.nodes[n.ParentID] != nil) {
+				a.nodes[id] = &node{ID: n.ID, Title: n.Title, Emoji: n.Emoji, Kind: n.Kind, ParentID: n.ParentID, Edited: n.Edited}
+				added = true
+			}
+		}
+		if added {
+			a.regroup()
+		}
+	}()
 	for _, p := range pages {
 		if p.InTrash {
 			continue
@@ -292,6 +306,14 @@ func (a *App) setPages(pages []*notion.Page) {
 			title = "Tanpa judul"
 		}
 		a.nodes[p.ID] = &node{ID: p.ID, Title: title, Emoji: p.Emoji(), Kind: kind, ParentID: p.Parent.ID(), Edited: p.LastEditedTime}
+	}
+	a.regroup()
+}
+
+// regroup builds the sidebar's groups from the nodes.
+func (a *App) regroup() {
+	for _, n := range a.nodes {
+		n.Children = nil
 	}
 	a.groups, a.databases = nil, nil
 	for _, n := range a.nodes {
@@ -345,11 +367,68 @@ func (a *App) open(n *node) {
 		a.session = nil
 	}
 	a.doc, a.extras, a.table, a.openErr = nil, nil, nil, ""
-	if n.Kind == "data_source" {
+	if n.Kind == "data_source" || n.Kind == "database" {
 		a.openTable(n)
 		return
 	}
 	a.openPage(n.ID)
+}
+
+// registerChildren adds a page's sub-pages and databases to the sidebar:
+// Notion's search can take a while to list pages shared just now, and
+// leaves out some it never indexes.
+func (a *App) registerChildren(pageID string, extras []doc.Extra) {
+	parent := a.nodes[pageID]
+	if parent == nil {
+		return
+	}
+	for _, x := range extras {
+		var kind string
+		switch x.Type {
+		case "child_page":
+			kind = "page"
+		case "child_database":
+			kind = "database"
+		default:
+			continue
+		}
+		if n := a.nodes[x.ID]; n != nil {
+			continue
+		}
+		title := strings.TrimSpace(x.Title)
+		if title == "" || title == "-" {
+			title = map[string]string{"page": "Tanpa judul", "database": "Database tanpa judul"}[kind]
+		}
+		n := &node{ID: x.ID, Title: title, Kind: kind, ParentID: pageID}
+		a.nodes[x.ID] = n
+		parent.Children = append(parent.Children, n)
+	}
+}
+
+// followLink opens a link clicked in the editor.
+func (a *App) followLink(url string) {
+	rest, ok := strings.CutPrefix(url, doc.LinkPrefix)
+	if !ok {
+		if ui.SafeToOpen(url) {
+			go mygo.Shell.OpenExternal(url)
+		}
+		return
+	}
+	kind, id, _ := strings.Cut(rest, "/")
+	a.win.Update(func() {
+		switch kind {
+		case "page", "db":
+			n := a.nodes[id]
+			if n == nil {
+				k := map[string]string{"page": "page", "db": "database"}[kind]
+				n = &node{ID: id, Title: "Memuat…", Kind: k, ParentID: a.selectedParent()}
+				a.nodes[id] = n
+			}
+			a.open(n)
+		default:
+			go mygo.Shell.OpenExternal("https://www.notion.so/" + strings.ReplaceAll(id, "-", ""))
+		}
+	})
 }
 
 func (a *App) openPage(id string) {
@@ -384,6 +463,7 @@ func (a *App) openPage(id string) {
 				})
 			}
 			a.session, a.doc, a.extras = s, d, extras
+			a.registerChildren(id, extras)
 			s.Start()
 		})
 	}()

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"sort"
 
 	"github.com/egoist/mygo/ui"
@@ -27,10 +28,26 @@ func (a *App) openTable(n *node) {
 	client := a.client
 	go func() {
 		ctx := context.Background()
-		ds, err := client.DataSource(ctx, n.ID)
+		dsID := n.ID
+		var err error
+		if n.Kind == "database" {
+			// A database block: its table is its first data source.
+			var db *notion.Database
+			if db, err = client.Database(ctx, n.ID); err == nil {
+				if len(db.DataSources) == 0 {
+					err = errors.New("database ini tidak punya data source")
+				} else {
+					dsID = db.DataSources[0].ID
+				}
+			}
+		}
+		var ds *notion.DataSource
+		if err == nil {
+			ds, err = client.DataSource(ctx, dsID)
+		}
 		var rows []*notion.Page
 		if err == nil {
-			rows, err = client.Query(ctx, n.ID, 500)
+			rows, err = client.Query(ctx, dsID, 500)
 		}
 		a.win.Update(func() {
 			t.loading = false

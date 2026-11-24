@@ -189,7 +189,7 @@ func (a *App) item(c *ui.Context, n *node, depth int) {
 			ui.Text(c, n.Emoji).FontSize(13)
 		}
 		ui.Text(c, n.Title).FontSize(14).SingleLine().Grow(1).MinWidth(0)
-		if n.Kind == "data_source" {
+		if n.Kind != "page" {
 			ui.Text(c, "db").FontSize(11).FontWeight(600).TextColor(p.Muted).Padding(1, 6).Background(p.Hover).Radius(5)
 			return
 		}
@@ -318,20 +318,20 @@ func (a *App) pagePanel(c *ui.Context) {
 		})
 		return
 	}
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(36, 56, 48, 56).Gap(14).MaxWidth(860).Children(func() {
-			ui.Text(c, title).FontSize(30).FontWeight(700).Selectable()
-			e := richtext.EditorBase(c.Key("editor-"+a.selected), a.doc, richtext.EditorOptions{
-				Label:       "Isi halaman",
-				Placeholder: "Mulai menulis…",
-				Font:        ui.Font{Family: "Inter", Size: 15},
-				Space:       func(int) float32 { return 6 },
-			}).LineHeight(1.5).MinHeight(200)
-			if e.Changed() && a.session != nil {
-				a.session.Edited(a.doc.Text())
-			}
-			a.extrasView(c)
-		})
+	// The editor scrolls itself, so it fills the rest of the panel.
+	ui.Column(c).Grow(1).MinHeight(0).Padding(28, 56, 0, 56).Gap(18).MaxWidth(900).Children(func() {
+		ui.Text(c, title).FontSize(30).FontWeight(700).Selectable()
+		a.extrasView(c)
+		e := richtext.EditorBase(c.Key("editor-"+a.selected), a.doc, richtext.EditorOptions{
+			Label:       "Isi halaman",
+			Placeholder: "Mulai menulis…",
+			OnLink:      a.followLink,
+			Font:        ui.Font{Family: "Inter", Size: 15},
+			Space:       func(int) float32 { return 6 },
+		}).LineHeight(1.5).Grow(1).MinHeight(0).Padding(0, 0, 48, 0)
+		if e.Changed() && a.session != nil {
+			a.session.Edited(a.doc.Text())
+		}
 	})
 }
 
@@ -341,8 +341,11 @@ func (a *App) extrasView(c *ui.Context) {
 		return
 	}
 	p := a.pal()
-	ui.Column(c).Gap(6).Margin(16, 0, 0, 0).Children(func() {
+	ui.Column(c).Gap(6).Children(func() {
 		for _, x := range a.extras {
+			if x.Type != "nested" {
+				continue // shown in place in the editor
+			}
 			row := ui.Row(c.Key("x"+x.ID)).AlignItems(ui.Center).Gap(10).Padding(10, 14).Radius(8).
 				Border(1, p.Line).Cursor(ui.CursorPointer)
 			row.Children(func() {

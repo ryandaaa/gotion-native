@@ -22,6 +22,9 @@ const samplePage = `[
  {"object":"block","id":"b1","type":"bulleted_list_item","bulleted_list_item":{"rich_text":[{"type":"text","plain_text":"Sync engine sudah bisa push per block","annotations":{"color":"default"}}]}},
  {"object":"block","id":"q","type":"callout","callout":{"rich_text":[{"type":"text","plain_text":"Jangan lupa backup database sebelum migrasi.","annotations":{"color":"default"}}]}},
  {"object":"block","id":"c","type":"code","code":{"language":"bash","rich_text":[{"type":"text","plain_text":"go tool mygo build -platform linux/amd64","annotations":{"color":"default"}}]}},
+ {"object":"block","id":"dv","type":"divider","divider":{}},
+ {"object":"block","id":"sp","type":"child_page","child_page":{"title":"01. INISIASI PROYEK"}},
+ {"object":"block","id":"db","type":"child_database","child_database":{"title":"Deliverables"}},
  {"object":"block","id":"x","type":"column_list","column_list":{}}
 ]`
 

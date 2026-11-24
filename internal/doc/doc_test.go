@@ -34,12 +34,15 @@ const page = `[
 
 func TestBuildThenItemsIsUnchanged(t *testing.T) {
 	text, known, extras := Build("p", blocks(t, page))
-	if len(extras) != 2 || extras[1].Title != "Sub" {
+	if len(extras) != 1 || extras[0].Title != "Sub" {
 		t.Fatalf("extras = %+v", extras)
 	}
 	items := Items(text, known)
-	if len(items) != 5 {
-		t.Fatalf("got %d items, want 5 (a b c d e)", len(items))
+	if len(items) != 7 {
+		t.Fatalf("got %d items, want 7 (a b c d e f g)", len(items))
+	}
+	if !known["f"].ReadOnly || items[5].Type != "image" || items[6].Type != "child_page" {
+		t.Errorf("read-only blocks: %+v %+v", items[5], items[6])
 	}
 	for _, it := range items {
 		if known[it.ID].Hash != it.Hash {

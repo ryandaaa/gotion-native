@@ -34,7 +34,9 @@ func NewID() string {
 }
 
 // IsLocal reports whether a paragraph ID is not a Notion block's.
-func IsLocal(id string) bool { return strings.HasPrefix(id, localPrefix) || strings.HasPrefix(id, contPrefix) }
+func IsLocal(id string) bool {
+	return strings.HasPrefix(id, localPrefix) || strings.HasPrefix(id, contPrefix)
+}
 
 // Known is what the app keeps about a block shown in the editor.
 type Known struct {
@@ -44,6 +46,51 @@ type Known struct {
 	HasChildren bool
 	Language    string
 	Hash        string // of the type and payload last synced
+	// ReadOnly blocks show in place but are never written: only deleted.
+	ReadOnly bool
+}
+
+// LinkPrefix starts the links the editor shows for sub-pages and the
+// blocks it does not edit: gotion:page/<id>, gotion:db/<id>, gotion:open/<id>.
+const LinkPrefix = "gotion:"
+
+// DividerColor is the color dividers are drawn with.
+var DividerColor = ui.Hex("#D6D3D1")
+
+func divider() *richtext.Attachment {
+	return &richtext.Attachment{Name: "divider", Width: 2000, Height: 14, Draw: func(p *ui.Painter, r ui.Rect) {
+		p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H/2, W: r.W, H: 1}, DividerColor, 0)
+	}}
+}
+
+// readOnlyParagraph is how a block the editor does not edit shows.
+func readOnlyParagraph(b *notion.Block, depth int) richtext.Paragraph {
+	st := richtext.ParagraphStyle{ID: b.ID, Indent: depth}
+	p := b.Text()
+	muted := richtext.Attributes{Color: ui.Hex("#78716C"), Italic: true}
+	link := func(prefix, label string) []richtext.Run {
+		return []richtext.Run{{Text: label, Attributes: richtext.Attributes{Link: LinkPrefix + prefix + b.ID, Underline: true}}}
+	}
+	switch b.Type {
+	case "divider":
+		return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Attachment: divider()}}}}
+	case "child_page":
+		title := strings.TrimSpace(p.Title)
+		if title == "" {
+			title = "Tanpa judul"
+		}
+		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{{Text: "📄 "}}, link("page/", title)...)}
+	case "child_database":
+		title := strings.TrimSpace(p.Title)
+		if title == "" || title == "-" {
+			title = "Database tanpa judul"
+		}
+		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{{Text: "▦ "}}, link("db/", title)...)}
+	}
+	label := "Block " + strings.ReplaceAll(b.Type, "_", " ") + " — buka di Notion ↗"
+	runs := link("open/", label)
+	runs[0].Attributes.Color, runs[0].Attributes.Italic = muted.Color, true
+	return richtext.Paragraph{Style: st, Runs: runs}
 }
 
 // Extra is a block the editor does not edit: a sub-page, a database or a
@@ -129,7 +176,11 @@ func Build(pageID string, blocks []*notion.Block) (richtext.Text, map[string]*Kn
 			}
 			if !Editable(b.Type) {
 				p := b.Text()
-				extras = append(extras, Extra{ID: b.ID, Type: b.Type, Title: p.Title})
+				if b.Type == "child_page" || b.Type == "child_database" {
+					extras = append(extras, Extra{ID: b.ID, Type: b.Type, Title: p.Title})
+				}
+				paras = append(paras, readOnlyParagraph(b, depth))
+				known[b.ID] = &Known{NotionID: b.ID, Type: b.Type, Parent: parent, HasChildren: b.HasChildren, ReadOnly: true, Hash: "ro"}
 				continue
 			}
 			p := b.Text()
@@ -161,7 +212,7 @@ func Build(pageID string, blocks []*notion.Block) (richtext.Text, map[string]*Kn
 	text := richtext.TextOf(paras...)
 	// Hash what was loaded, so only real edits are sent.
 	for _, it := range Items(text, known) {
-		if k := known[it.ID]; k != nil {
+		if k := known[it.ID]; k != nil && !k.ReadOnly {
 			k.Hash = it.Hash
 		}
 	}
@@ -259,6 +310,10 @@ func Items(text richtext.Text, known map[string]*Known) []Item {
 			return
 		}
 		it := &items[len(items)-1]
+		if k := known[it.ID]; k != nil && k.ReadOnly {
+			it.Type, it.Hash = k.Type, k.Hash
+			return
+		}
 		var rt []any
 		for i, line := range runs {
 			if i > 0 {
