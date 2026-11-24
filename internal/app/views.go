@@ -39,7 +39,15 @@ func (a *App) View(c *ui.Context) {
 		return
 	}
 	a.shortcuts(c)
-	ui.Column(c).Fill().Background(p.Sidebar).Children(func() {
+	root := ui.Column(c).Fill()
+	if w := washByID(a.set.Wash); w.plain() {
+		root.Background(p.Sidebar)
+	} else {
+		// The wash under everything, and its glow on top of it.
+		c.Root().LinearGradient(w.base(a.dark))
+		root.LinearGradient(w.glow(a.dark))
+	}
+	root.Children(func() {
 		a.titleBar(c, true)
 		row := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch)
 		// The sidebar slides open and shut: its width springs to its target,
@@ -185,13 +193,7 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 		if iconButton(c, p, iconRefresh, "Muat ulang (Ctrl+R)") {
 			a.refresh()
 		}
-		themeIcon := map[string]*ui.SVG{"system": iconAuto, "light": iconSun, "dark": iconMoon}[a.set.Theme]
-		if themeIcon == nil {
-			themeIcon = iconAuto
-		}
-		if iconButton(c, p, themeIcon, "Ganti tema (Ctrl+Shift+L)") {
-			a.cycleTheme()
-		}
+		a.themeButton(c)
 	})
 }
 
@@ -261,8 +263,8 @@ func (a *App) onboarding(c *ui.Context) {
 			step("2", func() {
 				ui.Text(c, "Tempel Internal Integration Secret").FontSize(14)
 				ui.Row(c).Gap(8).Children(func() {
-					in := ui.TextInput(c, &a.tokenInput).Password().Placeholder("ntn_…").Grow(1).Label("Token").AutoFocus()
-					if (in.Submitted() || ui.Button(c, "Cek").Disabled(a.checking).Clicked()) && !a.checking {
+					in := ui.TextInput(c, &a.tokenInput).Password().Placeholder("ntn_…").Grow(1).Label("Token").AutoFocus().Border(1, p.Faint.Alpha(0.5))
+					if (in.Submitted() || ui.Button(c, "Cek").Border(1, p.Faint.Alpha(0.5)).Disabled(a.checking).Clicked()) && !a.checking {
 						a.checkToken()
 					}
 				})
@@ -877,4 +879,56 @@ func (a *App) sidebarHandle(c *ui.Context) {
 		a.set.SidebarWidth = 270
 		a.saveSettings()
 	}
+}
+
+// themeButton opens the theme picker: light, dark or the system's, and
+// the color behind the cards.
+func (a *App) themeButton(c *ui.Context) {
+	p := a.pal()
+	s := map[string]*ui.SVG{"system": iconAuto, "light": iconSun, "dark": iconMoon}[a.set.Theme]
+	if s == nil {
+		s = iconAuto
+	}
+	b := ui.Box(c.Key("theme")).Padding(5).Radius(6).Cursor(ui.CursorPointer).Label("Tema").Tooltip("Tema (Ctrl+Shift+L ganti mode)")
+	if b.Hovered() || a.themeOpen {
+		b.Background(p.Hover)
+	}
+	b.Children(func() { ui.Icon(c, s).Size(16, 16).TextColor(p.Muted) })
+	if b.Clicked() {
+		a.themeOpen = !a.themeOpen
+	}
+	ui.Popover(c, b, &a.themeOpen, func() {
+		ui.Column(c).Width(268).Padding(6).Gap(14).Children(func() {
+			ui.Column(c).Gap(8).Children(func() {
+				ui.Text(c, "Mode").FontSize(12).FontWeight(600).TextColor(p.Faint)
+				ui.Row(c).Gap(2).Padding(2).Radius(8).Background(p.Sidebar).Children(func() {
+					for _, m := range []struct{ id, label string }{{"system", "Sistem"}, {"light", "Terang"}, {"dark", "Gelap"}} {
+						o := ui.Text(c.Key("mode"+m.id), m.label).FontSize(13).Padding(5, 0).Grow(1).TextAlign(ui.Center).Radius(6).Cursor(ui.CursorPointer)
+						if a.set.Theme == m.id || a.set.Theme == "" && m.id == "system" {
+							o.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
+						} else {
+							o.TextColor(p.Muted)
+						}
+						if o.Clicked() {
+							a.set.Theme = m.id
+							a.saveSettings()
+						}
+					}
+				})
+			})
+			ui.Column(c).Gap(8).Children(func() {
+				ui.Text(c, "Warna latar").FontSize(12).FontWeight(600).TextColor(p.Faint)
+				ui.Row(c).Wrap().Gap(8).Children(func() {
+					for _, w := range washes {
+						cur := a.set.Wash == w.id || a.set.Wash == "" && w.plain()
+						if a.swatch(c, w, cur).Clicked() {
+							a.set.Wash = w.id
+							a.saveSettings()
+						}
+					}
+				})
+				ui.Text(c, washByID(a.set.Wash).label).FontSize(12).TextColor(p.Muted)
+			})
+		})
+	})
 }

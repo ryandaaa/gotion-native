@@ -216,3 +216,19 @@ func TestSwitcherFadesIn(t *testing.T) {
 		t.Error("the switcher shows at once, with no frame between")
 	}
 }
+
+// TestWashes renders each wash, light and dark, with the picker open on
+// the first; SHOT=<dir> saves them to look at.
+func TestWashes(t *testing.T) {
+	for i, w := range washes {
+		for _, theme := range []string{"light", "dark"} {
+			a := tableApp(t)
+			a.set.Theme, a.set.Wash = theme, w.id
+			a.themeOpen = i == 1 && theme == "light"
+			tester := ui.NewTester(a.View, 1100, 560)
+			tester.Frame()
+			tester.Advance(time.Second)
+			snapshot(t, tester, "wash-"+w.id+"-"+theme)
+		}
+	}
+}

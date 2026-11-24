@@ -88,6 +88,8 @@ type App struct {
 	hpos    int
 
 	switcher switcherState
+	// themeOpen shows the theme picker.
+	themeOpen bool
 	toasts   []string
 	dark     bool
 
@@ -135,10 +137,11 @@ func (a *App) Close() {
 }
 
 func (a *App) pal() palette {
+	p := light
 	if a.dark {
-		return dark
+		p = dark
 	}
-	return light
+	return washByID(a.set.Wash).tint(p, a.dark)
 }
 
 func (a *App) toast(msg string) {
@@ -162,6 +165,7 @@ type settings struct {
 	FullWidth    bool            `json:"fullWidth"`
 	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
 	Zoom         float32         `json:"zoom"`    // 1 is 100%
+	Wash         string          `json:"wash"`    // the color behind the cards
 	// Scroll is the first paragraph in view of each page, to come back to.
 	Scroll map[string]int `json:"scroll"`
 	// Views is how each database shows: "table" or "cards".

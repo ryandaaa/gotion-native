@@ -51,9 +51,10 @@ func theme(p palette, isDark bool) *ui.Theme {
 	t.Background = p.Window
 	t.Text, t.TextMuted = p.Text, p.Faint
 	t.Accent = p.Accent
-	// Split draws its divider in Border: the sidebar's own color hides it
-	// until the pointer is over it, when it shows in the accent.
-	t.Border = p.Sidebar
+	// Split draws its divider in Border: a color that lets the window's
+	// own through hides it until the pointer is over it, when it shows in
+	// the accent.
+	t.Border = p.Hover.Alpha(0)
 	return t
 }
 
