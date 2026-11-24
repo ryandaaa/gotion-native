@@ -23,6 +23,16 @@ func (a *App) View(c *ui.Context) {
 	// Before SetTheme, the theme is the system's.
 	sysDark := c.Theme().Dark
 	a.dark = a.set.Theme == "dark" || a.set.Theme != "light" && sysDark
+	if a.win != nil && (a.buttonsSet == 0 || (a.buttonsSet == 2) != a.dark) {
+		// Windows draws its window buttons for the system's theme, not the
+		// app's: light glyphs on a light page when only the system is dark.
+		a.buttonsSet = 1
+		theme := mygo.ThemeLight
+		if a.dark {
+			a.buttonsSet, theme = 2, mygo.ThemeDark
+		}
+		a.win.SetWindowButtonsTheme(theme)
+	}
 	p := a.pal()
 	c.SetTheme(theme(p, a.dark))
 	if a.set.Zoom <= 0 {
@@ -308,8 +318,6 @@ func (a *App) sidebar(c *ui.Context) {
 			case "empty":
 				ui.Text(c, tr.T("Belum ada halaman yang terhubung. Di Notion: ••• → Connections → pilih integrasi kamu.")).
 					FontSize(12).TextColor(p.Faint).Padding(4, 10)
-			case "group":
-				a.groupHeader(c, r.n)
 			case "db":
 				a.sectionHeader(c, "Database", len(a.databases), "db")
 			default:
@@ -340,55 +348,17 @@ func (a *App) sectionHeader(c *ui.Context, title string, count int, key string) 
 	}
 }
 
-// groupHeader heads the pages under a top page, with how many there are.
-func (a *App) groupHeader(c *ui.Context, g *node) {
-	p := a.pal()
-	count := a.count(g)
-	h := ui.Row(c.Key("g"+g.ID)).AlignItems(ui.Center).Gap(6).Padding(14, 10, 4, 10).Cursor(ui.CursorPointer).Children(func() {
-		ui.Text(c, g.Title).FontSize(12).FontWeight(600).TextColor(p.Faint).SingleLine().MinWidth(0)
-		ui.Text(c, fmt.Sprint(count)).FontSize(12).TextColor(p.Faint)
-		ui.Box(c).Grow(1)
-		for _, pn := range a.panels {
-			if pn != nil && pn.session != nil && a.rootOf(pn.id) == g.ID {
-				if st, _ := pn.session.Status(); st == syncer.Failed || st == syncer.Offline {
-					ui.Text(c, st.String()).FontSize(11).FontWeight(600).TextColor(p.Warn)
-				}
-			}
-		}
-	})
-	if h.Clicked() {
-		a.set.Closed[g.ID] = !a.set.Closed[g.ID]
-		a.saveSettings()
-	}
-}
-
-func (a *App) count(n *node) int {
-	total := 1
-	for _, ch := range n.Children {
-		total += a.count(ch)
-	}
-	return total
-}
-
-func (a *App) rootOf(id string) string {
-	path := a.path(id)
-	if len(path) > 0 {
-		return path[0].ID
-	}
-	return id
-}
-
 // sideRow is a row of the sidebar: a page, a group's or a section's
 // header, or a note.
 type sideRow struct {
-	kind  string // "item", "group", "db", "error", "empty"
+	kind  string // "item", "db", "error", "empty"
 	n     *node
 	depth int
 	key   string
 }
 
-// sideRows lists the sidebar's rows: each group's header and its pages,
-// expanded where the user opened them, then the databases.
+// sideRows lists the sidebar's rows: the top pages, with what is inside
+// them where the user opened them, then the databases.
 func (a *App) sideRows() []sideRow {
 	var rows []sideRow
 	if a.loadErr != "" {
@@ -407,10 +377,7 @@ func (a *App) sideRows() []sideRow {
 		}
 	}
 	for _, g := range a.groups {
-		rows = append(rows, sideRow{kind: "group", n: g, key: "g" + g.ID})
-		if !a.set.Closed[g.ID] {
-			tree(g, 0)
-		}
+		tree(g, 0)
 	}
 	if len(a.databases) > 0 {
 		rows = append(rows, sideRow{kind: "db", key: "!db"})
@@ -475,7 +442,6 @@ func (a *App) item(c *ui.Context, n *node, depth int) {
 			ui.Text(c, "db").FontSize(11).FontWeight(600).TextColor(p.Muted).Padding(1, 6).Background(p.Hover).Radius(5)
 			return
 		}
-		ui.Text(c, ago(n.Edited)).FontSize(12).TextColor(p.Faint).SingleLine().Shrink(0)
 		if current != nil && current.session != nil {
 			st, _ := current.session.Status()
 			statusIcon(c, p, st).Size(14, 14)

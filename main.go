@@ -53,6 +53,13 @@ func main() {
 				{Role: mygo.RoleWindowMenu},
 			}))
 		}
+		// On Windows, only a window made with a material can show one:
+		// it is made with the glass (Acrylic), which the settings then
+		// keep or take away (applyGlass).
+		var vibrancy mygo.Vibrancy
+		if runtime.GOOS == "windows" {
+			vibrancy = mygo.VibrancyGlass
+		}
 		w := mygo.NewWindow(mygo.WindowOptions{
 			Title:         "gotion",
 			Width:         1280,
@@ -61,6 +68,7 @@ func main() {
 			MinHeight:     480,
 			StateKey:      "main",
 			TitleBarStyle: mygo.TitleBarHidden,
+			Vibrancy:      vibrancy,
 			Content:       ui.View(a.View),
 		})
 		emoji.OnLoad = w.Invalidate

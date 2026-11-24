@@ -96,6 +96,9 @@ type App struct {
 	databases []*node
 	loading   bool
 	loadErr   string
+	// buttonsSet is the theme the window buttons were last drawn for:
+	// 0 not yet, 1 light, 2 dark.
+	buttonsSet int
 	// searched tells that Notion said which pages there are, at least
 	// once since signing in: none then means none were shared.
 	searched bool

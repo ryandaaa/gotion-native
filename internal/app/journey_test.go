@@ -123,10 +123,9 @@ func TestFirstRunJourney(t *testing.T) {
 
 	snapshot(t, tester, "journey-2b-shared")
 	// 4. Opening it.
-	// The sidebar names the group after the page too: the page is the
-	// row under it.
-	group, _ := tester.Find("Catatan Pertama")
-	tester.ClickAt(group.X+40, group.Y+group.H/2+27)
+	// The page is a row of the sidebar's list, named once.
+	row, _ := tester.Find("Catatan Pertama")
+	tester.ClickAt(row.X+row.W/2, row.Y+row.H/2)
 	if !waitFor2(func() bool { frame(); pn := a.panels[0]; return pn != nil && pn.id == "p1" && pn.doc != nil }) {
 		pn := a.panels[0]
 		t.Fatalf("the page did not open: id %q doc %v session %v", pn.id, pn.doc != nil, pn.session != nil)
