@@ -6,6 +6,7 @@ import (
 	"gotion/internal/tr"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // FormatProperty returns a property value of a page as one line of text.
@@ -172,11 +173,44 @@ type named struct {
 	Color string `json:"color"`
 }
 
+var idMonths = [...]string{
+	"", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+	"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+}
+
 func shortDate(s string) string {
-	if len(s) >= 16 && s[10] == 'T' {
-		return s[:10] + " " + s[11:16]
+	if len(s) < 10 {
+		return s
 	}
-	return s
+	d, err := time.Parse("2006-01-02", s[:10])
+	if err != nil {
+		return s
+	}
+	month := d.Month().String()
+	if tr.Lang() == tr.ID {
+		month = idMonths[d.Month()]
+	}
+	out := fmt.Sprintf("%02d %s %04d", d.Day(), month, d.Year())
+	if len(s) >= 16 && s[10] == 'T' {
+		out += " " + s[11:16]
+	}
+	return out
+}
+
+// DateStart returns the YYYY-MM-DD start of a date property, "" when unset.
+func DateStart(raw json.RawMessage) string {
+	var v struct {
+		Date *struct {
+			Start string `json:"start"`
+		} `json:"date"`
+	}
+	if json.Unmarshal(raw, &v) != nil || v.Date == nil {
+		return ""
+	}
+	if len(v.Date.Start) >= 10 {
+		return v.Date.Start[:10]
+	}
+	return v.Date.Start
 }
 
 // Chip is a value shown as a colored tag: an option of a select, status or

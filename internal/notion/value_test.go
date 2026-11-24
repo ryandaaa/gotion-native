@@ -2,6 +2,7 @@ package notion
 
 import (
 	"encoding/json"
+	"gotion/internal/tr"
 	"strings"
 	"testing"
 )
@@ -54,5 +55,45 @@ func TestPropertyOptions(t *testing.T) {
 	json.Unmarshal([]byte(`{"id":"x","name":"Status","type":"status","status":{"options":[{"name":"Done","color":"green"}]}}`), &p)
 	if len(p.Options) != 1 || p.Options[0].Color != "green" || !p.Editable() {
 		t.Errorf("%+v", p)
+	}
+}
+
+func TestDateFormattingAndStart(t *testing.T) {
+	prev := tr.Lang()
+	t.Cleanup(func() { tr.Set(prev) })
+
+	tr.Set(tr.ID)
+	casesID := []struct {
+		raw       string
+		wantFmt   string
+		wantStart string
+	}{
+		{`{"type":"date","date":{"start":"2026-12-05"}}`, "05 Desember 2026", "2026-12-05"},
+		{`{"type":"date","date":{"start":"2026-08-09T14:30:00.000Z"}}`, "09 Agustus 2026 14:30", "2026-08-09"},
+		{`{"type":"date","date":{"start":"2026-11-20","end":"2026-12-05"}}`, "20 November 2026 → 05 Desember 2026", "2026-11-20"},
+		{`{"type":"created_time","created_time":"2026-01-03T08:05:00Z"}`, "03 Januari 2026 08:05", ""},
+		{`{"type":"date","date":null}`, "", ""},
+	}
+	for _, tc := range casesID {
+		if got := FormatProperty(json.RawMessage(tc.raw)); got != tc.wantFmt {
+			t.Errorf("ID FormatProperty(%s) = %q, want %q", tc.raw, got, tc.wantFmt)
+		}
+		if got := DateStart(json.RawMessage(tc.raw)); got != tc.wantStart {
+			t.Errorf("ID DateStart(%s) = %q, want %q", tc.raw, got, tc.wantStart)
+		}
+	}
+
+	tr.Set(tr.EN)
+	casesEN := []struct {
+		raw     string
+		wantFmt string
+	}{
+		{`{"type":"date","date":{"start":"2026-12-05"}}`, "05 December 2026"},
+		{`{"type":"date","date":{"start":"2026-08-09T14:30:00.000Z"}}`, "09 August 2026 14:30"},
+	}
+	for _, tc := range casesEN {
+		if got := FormatProperty(json.RawMessage(tc.raw)); got != tc.wantFmt {
+			t.Errorf("EN FormatProperty(%s) = %q, want %q", tc.raw, got, tc.wantFmt)
+		}
 	}
 }

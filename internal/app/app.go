@@ -150,6 +150,7 @@ func New() *App {
 // Attach gives the app its window, and starts loading.
 func (a *App) Attach(w *mygo.Window) {
 	a.win = w
+	mygo.App.SetLocale(tr.Lang())
 	a.applyGlass()
 	if a.client == nil {
 		return
@@ -159,9 +160,28 @@ func (a *App) Attach(w *mygo.Window) {
 	a.restoreTabs()
 }
 
+func (a *App) flushPanel(p *panel) {
+	if p == nil {
+		return
+	}
+	a.sendTitle(p)
+	if p.table != nil {
+		a.sendTableTitle(p.table)
+	}
+}
+
 // Close sends unsaved edits.
 func (a *App) Close() {
+	for _, list := range a.tabs {
+		for _, p := range list {
+			a.flushPanel(p)
+			if p != nil && p.session != nil {
+				p.session.Close()
+			}
+		}
+	}
 	for _, p := range a.panels {
+		a.flushPanel(p)
 		if p != nil && p.session != nil {
 			p.session.Close()
 		}
@@ -602,6 +622,7 @@ func (a *App) remember(n *node, i int) {
 // show loads n into panel i's active tab, closing what it showed.
 func (a *App) show(n *node, i int) {
 	old := a.panels[i]
+	a.flushPanel(old)
 	if old != nil && old.session != nil {
 		s := old.session
 		go s.Close()
@@ -692,6 +713,7 @@ func (a *App) closeSecond() {
 		return
 	}
 	for _, t := range a.tabs[1] {
+		a.flushPanel(t)
 		if t.session != nil {
 			go t.session.Close()
 		}
@@ -900,6 +922,9 @@ func (a *App) applyLanguage() {
 		l = tr.Pick(PreferredLanguages())
 	}
 	tr.Set(l)
+	if a.win != nil {
+		mygo.App.SetLocale(l)
+	}
 }
 
 // ApplyLanguage follows the language settings again, once the system's

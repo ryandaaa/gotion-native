@@ -39,6 +39,7 @@ func (a *App) closeTab(i, k int) {
 		return
 	}
 	t := a.tabs[i][k]
+	a.flushPanel(t)
 	if t.session != nil {
 		go t.session.Close()
 	}

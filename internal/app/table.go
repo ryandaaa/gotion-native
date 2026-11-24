@@ -7,6 +7,7 @@ import (
 	"gotion/internal/tr"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -18,7 +19,12 @@ import (
 type tableView struct {
 	id             string
 	dsID           string // the data source, where new rows go
+	dbID           string // the database container, when known
 	title          string
+	titleSent      string
+	titleInit      bool
+	titleEdit      time.Time
+	titleDirty     bool
 	edit           cellEdit
 	adding         newRow
 	query          tableQuery
@@ -33,16 +39,23 @@ type tableView struct {
 }
 
 func (a *App) openTable(pn *panel, n *node) {
-	t := &tableView{id: n.ID, title: n.Title, loading: true}
+	initTitle := n.Title
+	if initTitle == tr.T("Memuat…") || initTitle == tr.T("Tanpa judul") || initTitle == tr.T("Database tanpa judul") {
+		initTitle = ""
+	}
+	t := &tableView{id: n.ID, title: initTitle, titleSent: initTitle, titleInit: true, loading: true}
+	if n.Kind == "database" {
+		t.dbID = n.ID
+	}
 	pn.table = t
 	client := a.client
 	go func() {
 		ctx := context.Background()
 		dsID := n.ID
 		var err error
+		var db *notion.Database
 		if n.Kind == "database" {
 			// A database block: its table is its first data source.
-			var db *notion.Database
 			if db, err = client.Database(ctx, n.ID); err == nil {
 				if len(db.DataSources) == 0 {
 					err = errors.New("database ini tidak punya data source")
@@ -77,8 +90,19 @@ func (a *App) openTable(pn *panel, n *node) {
 				return ci.Name < cj.Name
 			})
 			t.rows, t.dsID = rows, dsID
-			if title := notion.PlainText(ds.Title); title != "" && t.title == tr.T("Memuat…") {
-				t.title = title
+			if t.dbID == "" && ds.Parent.Type == "database_id" {
+				t.dbID = ds.Parent.DatabaseID
+			}
+			title := notion.PlainText(ds.Title)
+			if title == "" && db != nil {
+				title = notion.PlainText(db.Title)
+			}
+			if !t.titleDirty {
+				t.title, t.titleSent = title, title
+				if n := a.nodes[t.id]; n != nil {
+					n.Title = nonEmpty(title, tr.T("Database tanpa judul"))
+					a.regroup()
+				}
 			}
 		})
 	}()
@@ -162,7 +186,7 @@ func colWidth(p notion.Property) float32 {
 	case "number", "unique_id":
 		return 110
 	case "date", "created_time", "last_edited_time":
-		return 150
+		return 185
 	}
 	return 190
 }
@@ -188,17 +212,60 @@ func hasValue(raw []byte) bool {
 	return notion.FormatProperty(raw) != ""
 }
 
+// sendTableTitle sends table t's title to Notion when it changed.
+func (a *App) sendTableTitle(t *tableView) {
+	if t == nil || !t.titleDirty {
+		return
+	}
+	title := strings.TrimSpace(t.title)
+	t.titleDirty = false
+	if title == t.titleSent {
+		return
+	}
+	old := t.titleSent
+	t.titleSent = title
+	shown := nonEmpty(title, tr.T("Database tanpa judul"))
+	if n := a.nodes[t.id]; n != nil {
+		n.Title = shown
+	}
+	if t.dbID != "" {
+		if n := a.nodes[t.dbID]; n != nil {
+			n.Title = shown
+		}
+	}
+	a.regroup()
+	if a.client == nil {
+		return
+	}
+	client, dsID, dbID := a.client, nonEmpty(t.dsID, t.id), t.dbID
+	go func() {
+		if err := client.SetDataSourceTitle(context.Background(), dsID, dbID, title); err != nil {
+			a.update(func() {
+				t.titleSent = old
+				a.toast(tr.T("Judul gagal disimpan: ") + errText(err))
+			})
+		}
+	}()
+}
+
 func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 	p := a.pal()
 	t := pn.table
-	if n := a.nodes[t.id]; n != nil && n.Title != tr.T("Memuat…") {
-		t.title = n.Title
+	if !t.titleInit {
+		t.titleInit = true
+		t.titleSent = t.title
 	}
+	if !t.titleDirty && t.title == "" && t.loading {
+		if n := a.nodes[t.id]; n != nil && n.Title != tr.T("Memuat…") && n.Title != tr.T("Tanpa judul") && n.Title != tr.T("Database tanpa judul") {
+			t.title, t.titleSent = n.Title, n.Title
+		}
+	}
+	headTitle := nonEmpty(strings.TrimSpace(t.title), tr.T("Database tanpa judul"))
 	view := a.set.Views[t.id]
 	if view == "" {
 		view = "table"
 	}
-	a.panelHeader(c, i, iconTable, t.title, "database", func() {
+	a.panelHeader(c, i, iconTable, headTitle, "database", func() {
 		if t.loading || t.err != "" {
 			return
 		}
@@ -234,15 +301,33 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 			ui.Text(c, tr.T("Gagal memuat database: ")+t.err).FontSize(14).TextColor(c.Theme().Danger)
 		})
 		return
-	case len(t.rows) == 0 && len(t.query.conds) == 0:
+	}
+	ui.Row(c).Padding(16, 24, 0, 24).AlignItems(ui.Center).Gap(10).Children(func() {
+		if n := a.nodes[t.id]; n != nil && n.Emoji != "" {
+			emoji.View(c, n.Emoji, 28)
+		}
+		in := ui.TextInput(c.Key("db-title"+t.id), &t.title).Placeholder(tr.T("Database tanpa judul")).
+			FontSize(26).FontWeight(700).Grow(1).Background(ui.Color{}).Padding(2, 0).FocusRing(false).
+			Label(tr.T("Judul database"))
+		if in.Focused() {
+			in.BorderWidth(0, 0, 1.5, 0).BorderColor(p.EditLine).Radius(0)
+		} else {
+			in.Border(0, ui.Color{})
+		}
+		if in.Changed() {
+			t.titleDirty, t.titleEdit = true, time.Now()
+			c.After(1600 * time.Millisecond)
+		}
+		if t.titleDirty && (in.Submitted() || !in.Focused() || time.Since(t.titleEdit) > 1500*time.Millisecond) {
+			a.sendTableTitle(t)
+		}
+	})
+	if len(t.rows) == 0 && len(t.query.conds) == 0 {
 		ui.Column(c).Fill().Center().Children(func() {
 			ui.Text(c, tr.T("Database ini masih kosong")).FontSize(14).TextColor(p.Faint)
 		})
 		return
 	}
-	ui.Column(c).Padding(16, 24, 0, 24).Children(func() {
-		ui.Text(c, t.title).FontSize(26).FontWeight(700)
-	})
 	if view == "cards" {
 		a.cards(c, i, t)
 		return

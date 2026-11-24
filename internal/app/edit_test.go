@@ -52,6 +52,7 @@ func editApp(t *testing.T) (*App, *tableView, *recorder, *ui.Tester) {
 		{Name: "Nama", Type: "title"},
 		{Name: "Selesai", Type: "checkbox"},
 		{Name: "Status", Type: "status", Options: []notion.Option{{Name: "Todo", Color: "default"}, {Name: "Doing", Color: "yellow"}, {Name: "Done", Color: "green"}, {Name: "Blocked", Color: "red"}}},
+		{Name: "Deadline", Type: "date"},
 	}
 	tv := &tableView{id: "tasks", dsID: "ds1", title: "Tasks", columns: cols, rows: rows}
 	a.panels[0] = &panel{id: "tasks", table: tv}
@@ -225,5 +226,105 @@ func TestAddColumnShot(t *testing.T) {
 	snapshot(t, tester, "db-add-column")
 	if _, ok := tester.Find("Tambah kolom"); !ok {
 		t.Error("no add column popover")
+	}
+}
+
+func TestRenameDatabaseInline(t *testing.T) {
+	a, tv, rec, tester := editApp(t)
+	tv.dbID = "db1"
+	if err := tester.Click("Judul database"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Key(ui.Cmd, ui.KeyA)
+	tester.Type("Daftar Tugas")
+	tester.Key(0, ui.KeyEnter)
+	tester.Frame()
+	if tv.title != "Daftar Tugas" {
+		t.Errorf("tv.title = %q, want %q", tv.title, "Daftar Tugas")
+	}
+	if a.nodes["tasks"].Title != "Daftar Tugas" {
+		t.Errorf("node title = %q, want %q", a.nodes["tasks"].Title, "Daftar Tugas")
+	}
+	for _, want := range []string{
+		`PATCH /data_sources/ds1 {"title":[{"text":{"content":"Daftar Tugas"},"type":"text"}]}`,
+		`PATCH /databases/db1 {"title":[{"text":{"content":"Daftar Tugas"},"type":"text"}]}`,
+	} {
+		if !waitSent(rec, want) {
+			t.Errorf("missing %s in:\n%s", want, rec.all())
+		}
+	}
+}
+
+func TestEditDateWithCalendar(t *testing.T) {
+	nowFunc = func() time.Time { return time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { nowFunc = time.Now })
+
+	a, tv, rec, tester := editApp(t)
+	if _, ok := tester.Find("20 November 2026"); !ok {
+		t.Fatalf("formatted date not shown; texts: %v", tester.Texts())
+	}
+	if err := tester.Click("20 November 2026"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Advance(time.Second)
+	snapshot(t, tester, "db-edit-date")
+	a.set.Theme = "dark"
+	tester.Frame()
+	snapshot(t, tester, "db-edit-date-dark")
+	a.set.Theme = "light"
+	tester.Frame()
+
+	if err := tester.Click("Next month"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if !tv.edit.open {
+		t.Fatal("popover closed when browsing next month")
+	}
+	if _, ok := tester.Find("December 2026"); !ok {
+		t.Fatalf("December 2026 not shown; texts: %v", tester.Texts())
+	}
+	if err := tester.Click("December 15, 2026"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if tv.edit.open {
+		t.Error("popover stayed open after picking a calendar day")
+	}
+	if got := notion.FormatProperty(tv.rows[0].Properties["Deadline"]); got != "15 Desember 2026" {
+		t.Errorf("shown %q, want %q", got, "15 Desember 2026")
+	}
+	if !waitSent(rec, `PATCH /pages/r1 {"properties":{"Deadline":{"date":{"start":"2026-12-15"}}}}`) {
+		t.Errorf("sent:\n%s", rec.all())
+	}
+
+	if err := tester.Click("15 Desember 2026"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Advance(time.Second)
+	if err := tester.Click("Hari ini"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if got := notion.FormatProperty(tv.rows[0].Properties["Deadline"]); got != "24 November 2026" {
+		t.Errorf("today shown %q, want %q", got, "24 November 2026")
+	}
+	if !waitSent(rec, `PATCH /pages/r1 {"properties":{"Deadline":{"date":{"start":"2026-11-24"}}}}`) {
+		t.Errorf("sent:\n%s", rec.all())
+	}
+
+	if err := tester.Click("24 November 2026"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Advance(time.Second)
+	if err := tester.Click("Kosongkan"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if got := notion.FormatProperty(tv.rows[0].Properties["Deadline"]); got != "" {
+		t.Errorf("cleared shown %q, want empty", got)
+	}
+	if !waitSent(rec, `PATCH /pages/r1 {"properties":{"Deadline":{"date":null}}}`) {
+		t.Errorf("sent:\n%s", rec.all())
 	}
 }

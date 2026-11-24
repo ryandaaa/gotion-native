@@ -43,6 +43,7 @@ func TestMoreEndpoints(t *testing.T) {
 	c.SetIcon(ctx, "p1", "🔥")
 	c.CreatePageMarkdown(ctx, "p2", "Impor", "# Hai\nisi")
 	c.CreateDatabase(ctx, "p2", "Tugas")
+	c.SetDataSourceTitle(ctx, "ds1", "db1", "Proyek Baru")
 	if len(us) != 1 || md != "# Judul" {
 		t.Errorf("users %v md %q", us, md)
 	}
@@ -58,6 +59,8 @@ func TestMoreEndpoints(t *testing.T) {
 		"GET /pages/p1/markdown?markdown_version=v2",
 		`POST /databases {"initial_data_source":{"properties":{"Beres":{"checkbox":{},"type":"checkbox"}`,
 		`"parent":{"page_id":"p2","type":"page_id"},"title":[{"text":{"content":"Tugas"}}]}`,
+		`PATCH /data_sources/ds1 {"title":[{"text":{"content":"Proyek Baru"},"type":"text"}]}`,
+		`PATCH /databases/db1 {"title":[{"text":{"content":"Proyek Baru"},"type":"text"}]}`,
 	} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing %s in\n%s", want, all)

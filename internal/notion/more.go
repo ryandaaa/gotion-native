@@ -214,6 +214,27 @@ func (c *Client) UpdateSchema(ctx context.Context, id string, props map[string]a
 	return &d, c.Do(ctx, "PATCH", "/data_sources/"+id, map[string]any{"properties": props}, &d)
 }
 
+// SetDataSourceTitle changes a data source's title (and its container
+// database's title when dbID is given).
+func (c *Client) SetDataSourceTitle(ctx context.Context, dsID, dbID, title string) error {
+	items := []any{}
+	if title != "" {
+		items = []any{map[string]any{"type": "text", "text": map[string]any{"content": title}}}
+	}
+	body := map[string]any{"title": items}
+	if dsID != "" {
+		if err := c.Do(ctx, "PATCH", "/data_sources/"+dsID, body, nil); err != nil {
+			return err
+		}
+	}
+	if dbID != "" && dbID != dsID {
+		if err := c.Do(ctx, "PATCH", "/databases/"+dbID, body, nil); err != nil && dsID == "" {
+			return err
+		}
+	}
+	return nil
+}
+
 // ColumnTypes are the kinds of column the app adds, Notion's names and the
 // app's, in the order it offers them.
 var ColumnTypes = []struct{ Type, Label string }{

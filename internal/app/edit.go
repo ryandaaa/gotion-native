@@ -6,6 +6,7 @@ import (
 	"gotion/internal/tr"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -17,6 +18,7 @@ type cellEdit struct {
 	row, col string
 	open     bool
 	text     string
+	date     time.Time
 	err      string
 }
 
@@ -87,10 +89,17 @@ func (a *App) editable(c *ui.Context, t *tableView, r *notion.Page, col notion.P
 			return true
 		}
 		text := notion.FormatProperty(raw)
-		if col.Type == "date" && len(text) > 10 {
-			text = text[:10]
+		var dt time.Time
+		if col.Type == "date" {
+			text = notion.DateStart(raw)
+			if parsed, err := time.Parse("2006-01-02", text); err == nil {
+				dt = parsed
+			} else {
+				now := nowFunc()
+				dt = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+			}
 		}
-		*e = cellEdit{row: r.ID, col: col.Name, open: true, text: text}
+		*e = cellEdit{row: r.ID, col: col.Name, open: true, text: text, date: dt}
 		editing = true
 	}
 	if editing {
@@ -170,8 +179,66 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 			}
 		case "people", "relation":
 			a.linksEditor(c, t, r, col)
+		case "date":
+			ui.Row(c).Justify(ui.Center).Children(func() {
+				if ui.Calendar(c, &e.date).Browse().AutoFocus().Changed() {
+					e.err = ""
+					if a.setCell(t, r, col, e.date.Format("2006-01-02"), false, nil) {
+						e.open = false
+					}
+				}
+			})
+			in := ui.TextInput(c, &e.text).Placeholder(tr.T("TTTT-BB-HH")).Label(col.Name).FontSize(13)
+			if in.Changed() {
+				e.err = ""
+				if parsed, err := time.Parse("2006-01-02", strings.TrimSpace(e.text)); err == nil {
+					e.date = parsed
+				}
+			}
+			if e.err != "" {
+				ui.Text(c, e.err).FontSize(12).TextColor(c.Theme().Danger).Padding(0, 4)
+			}
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				todayBtn := ui.ButtonBase(c.Key("today")).Role(ui.RoleButton).Label(tr.T("Hari ini")).
+					Padding(5, 8).Radius(6).Cursor(ui.CursorPointer)
+				if todayBtn.Pressed() {
+					todayBtn.Background(p.Line)
+				} else if todayBtn.Hovered() {
+					todayBtn.Background(p.Hover)
+				}
+				todayBtn.Children(func() {
+					ui.Text(c, tr.T("Hari ini")).FontSize(13).TextColor(p.Muted)
+				})
+				if todayBtn.Clicked() {
+					e.err = ""
+					if a.setCell(t, r, col, nowFunc().Format("2006-01-02"), false, nil) {
+						e.open = false
+					}
+				}
+				if hasValue(r.Properties[col.Name]) {
+					clearBtn := ui.ButtonBase(c.Key("clear")).Role(ui.RoleButton).Label(tr.T("Kosongkan")).
+						Padding(5, 8).Radius(6).Cursor(ui.CursorPointer)
+					if clearBtn.Pressed() {
+						clearBtn.Background(p.Line)
+					} else if clearBtn.Hovered() {
+						clearBtn.Background(p.Hover)
+					}
+					clearBtn.Children(func() {
+						ui.Text(c, tr.T("Kosongkan")).FontSize(13).TextColor(p.Muted)
+					})
+					if clearBtn.Clicked() {
+						e.err = ""
+						a.setCell(t, r, col, "", false, nil)
+						e.open = false
+					}
+				}
+				ui.Box(c).Grow(1)
+				if (in.Submitted() || ui.PrimaryButton(c, tr.T("Simpan")).Clicked()) && a.setCell(t, r, col, e.text, false, nil) {
+					e.open = false
+				}
+			})
 		default:
-			hint := map[string]string{"date": tr.T("TTTT-BB-HH"), "number": tr.T("Angka"), "url": "https://", "email": tr.T("nama@contoh.com"), "phone_number": "+62…"}[col.Type]
+			hint := map[string]string{"number": tr.T("Angka"), "url": "https://", "email": tr.T("nama@contoh.com"), "phone_number": "+62…"}[col.Type]
 			in := ui.TextInput(c, &e.text).Placeholder(hint).AutoFocus().Label(col.Name)
 			if col.Type == "rich_text" {
 				in.Multiline(true).Lines(1, 6)

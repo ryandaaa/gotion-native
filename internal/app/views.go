@@ -652,6 +652,7 @@ func (a *App) panelHeader(c *ui.Context, i int, s *ui.SVG, title, badge string, 
 				a.closeSecond()
 			} else {
 				for _, t := range a.tabs[0] {
+					a.flushPanel(t)
 					if t.session != nil {
 						go t.session.Close()
 					}
