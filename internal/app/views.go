@@ -298,31 +298,26 @@ func (a *App) sidebar(c *ui.Context) {
 				}
 			}
 		})
-		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Gap(1).Children(func() {
-				if a.loadErr != "" {
-					ui.Text(c, "Gagal memuat: "+a.loadErr).FontSize(12).TextColor(c.Theme().Danger).Padding(4, 10)
-				}
-				if len(a.nodes) == 0 && !a.loading {
-					ui.Text(c, "Belum ada halaman yang terhubung. Di Notion: ••• → Connections → pilih integrasi kamu.").
-						FontSize(12).TextColor(p.Faint).Padding(4, 10)
-				}
-				for _, g := range a.groups {
-					a.groupHeader(c, g)
-					if !a.set.Closed[g.ID] {
-						a.tree(c, g, 0)
-					}
-				}
-				if len(a.databases) > 0 {
-					a.sectionHeader(c, "Database", len(a.databases), "db")
-					if !a.set.Closed["db"] {
-						for _, n := range a.databases {
-							a.tree(c, n, 0)
-						}
-					}
-				}
-			})
-		})
+		// Only the rows in view are built: a workspace of hundreds of pages
+		// costs a frame what a screenful does.
+		rows := a.sideRows()
+		a.sideList.Key = func(i int) any { return rows[i].key }
+		ui.List(c, &a.sideList, len(rows), func(i int) {
+			r := rows[i]
+			switch r.kind {
+			case "error":
+				ui.Text(c, "Gagal memuat: "+a.loadErr).FontSize(12).TextColor(c.Theme().Danger).Padding(4, 10)
+			case "empty":
+				ui.Text(c, "Belum ada halaman yang terhubung. Di Notion: ••• → Connections → pilih integrasi kamu.").
+					FontSize(12).TextColor(p.Faint).Padding(4, 10)
+			case "group":
+				a.groupHeader(c, r.n)
+			case "db":
+				a.sectionHeader(c, "Database", len(a.databases), "db")
+			default:
+				a.item(c, r.n, r.depth)
+			}
+		}).Grow(1).Label("Halaman")
 		ui.Row(c).AlignItems(ui.Center).Gap(2).Padding(6, 4, 0, 4).Children(func() {
 			if iconButton(c, p, iconLogout, "Keluar (hapus token)") {
 				a.signOut()
@@ -385,14 +380,49 @@ func (a *App) rootOf(id string) string {
 	return id
 }
 
-// tree shows n and, when expanded, the pages under it.
-func (a *App) tree(c *ui.Context, n *node, depth int) {
-	a.item(c, n, depth)
-	if a.set.Open[n.ID] {
-		for _, ch := range n.Children {
-			a.tree(c, ch, depth+1)
+// sideRow is a row of the sidebar: a page, a group's or a section's
+// header, or a note.
+type sideRow struct {
+	kind  string // "item", "group", "db", "error", "empty"
+	n     *node
+	depth int
+	key   string
+}
+
+// sideRows lists the sidebar's rows: each group's header and its pages,
+// expanded where the user opened them, then the databases.
+func (a *App) sideRows() []sideRow {
+	var rows []sideRow
+	if a.loadErr != "" {
+		rows = append(rows, sideRow{kind: "error", key: "!error"})
+	}
+	if len(a.nodes) == 0 && !a.loading {
+		rows = append(rows, sideRow{kind: "empty", key: "!empty"})
+	}
+	var tree func(n *node, depth int)
+	tree = func(n *node, depth int) {
+		rows = append(rows, sideRow{kind: "item", n: n, depth: depth, key: n.ID})
+		if a.set.Open[n.ID] {
+			for _, ch := range n.Children {
+				tree(ch, depth+1)
+			}
 		}
 	}
+	for _, g := range a.groups {
+		rows = append(rows, sideRow{kind: "group", n: g, key: "g" + g.ID})
+		if !a.set.Closed[g.ID] {
+			tree(g, 0)
+		}
+	}
+	if len(a.databases) > 0 {
+		rows = append(rows, sideRow{kind: "db", key: "!db"})
+		if !a.set.Closed["db"] {
+			for _, n := range a.databases {
+				tree(n, 0)
+			}
+		}
+	}
+	return rows
 }
 
 func (a *App) item(c *ui.Context, n *node, depth int) {

@@ -1,18 +1,14 @@
 package app
 
 import (
-	"strings"
-
 	"github.com/egoist/mygo/ui/richtext"
 )
 
-// signature is what a read-only paragraph holds: its text and attachments.
-func signature(p richtext.Paragraph) string {
-	var b strings.Builder
-	for _, r := range p.Runs {
-		b.WriteString(r.Text)
-	}
-	return b.String()
+// paragraphText is the text of the paragraph holding rune i, attachments
+// as their object character: what a read-only paragraph keeps.
+func paragraphText(t richtext.Text, i int) string {
+	start, end := t.ParagraphRange(i)
+	return t.Slice(start, end).String()
 }
 
 // guardReadOnly records what panel pn's read-only paragraphs hold, to tell
@@ -23,24 +19,25 @@ func (a *App) guardReadOnly(pn *panel) {
 		return
 	}
 	ids := pn.session.ReadOnly()
-	for _, p := range pn.doc.Text().Paragraphs() {
+	t := pn.doc.Text()
+	for at, p := range t.Paragraphs() {
 		if ids[p.Style.ID] {
-			pn.readOnly[p.Style.ID] = signature(p)
+			pn.readOnly[p.Style.ID] = paragraphText(t, at)
 		}
 	}
 }
 
-// brokeReadOnly reports whether the document changed what a read-only
-// paragraph holds: typed into it, or joined another to it. Taking a
-// read-only paragraph out whole is fine: that deletes its block.
+// brokeReadOnly reports whether the last edit changed what a read-only
+// paragraph holds: typed into it, or joined another to it. Either leaves
+// the caret in it, so the caret's paragraph is the one to look at: no
+// pass over a long page on every key. Taking a read-only paragraph out
+// whole is fine: that deletes its block.
 func brokeReadOnly(d *richtext.Document, readOnly map[string]string) bool {
 	if len(readOnly) == 0 {
 		return false
 	}
-	for _, p := range d.Text().Paragraphs() {
-		if sig, ok := readOnly[p.Style.ID]; ok && signature(p) != sig {
-			return true
-		}
-	}
-	return false
+	t := d.Text()
+	_, caret := d.Selection()
+	sig, ok := readOnly[t.ParagraphStyleAt(caret).ID]
+	return ok && paragraphText(t, caret) != sig
 }

@@ -90,8 +90,9 @@ type App struct {
 	switcher switcherState
 	// themeOpen shows the theme picker.
 	themeOpen bool
-	toasts   []string
-	dark     bool
+	sideList  ui.ListState
+	toasts    []string
+	dark      bool
 
 	// widths are the last widths of the panels, for pages opened into them.
 	widths [2]float32

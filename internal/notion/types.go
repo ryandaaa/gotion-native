@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -261,18 +262,38 @@ func (c *Client) Tree(ctx context.Context, id string, depth int) ([]*Block, erro
 	if depth <= 0 {
 		return blocks, nil
 	}
+	// The children of the blocks, four requests at a time; the client's
+	// bucket keeps the pace Notion takes.
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var first error
 	for _, b := range blocks {
+		d := depth - 1
 		switch {
 		case b.Type == "column_list" || b.Type == "column":
-			// Containers, not levels: their blocks show at their depth.
-			if b.Children, err = c.Tree(ctx, b.ID, depth); err != nil {
-				return nil, err
-			}
+			d = depth // containers, not levels: their blocks show at their depth
 		case b.HasChildren && (Nests(b.Type) || b.Type == "table"):
-			if b.Children, err = c.Tree(ctx, b.ID, depth-1); err != nil {
-				return nil, err
-			}
+		default:
+			continue
 		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			kids, err := c.Tree(ctx, b.ID, d)
+			<-sem
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil && first == nil {
+				first = err
+			}
+			b.Children = kids
+		}()
+	}
+	wg.Wait()
+	if first != nil {
+		return nil, first
 	}
 	return blocks, nil
 }

@@ -205,14 +205,19 @@ func Open(ctx context.Context, client *notion.Client, botID, pageID string, shap
 		s.seenTime, s.seenBy = c.Page.LastEditedTime, c.Page.LastEditedBy.ID
 		return s, text, extras, nil
 	}
-	page, blocks, err := fetch(ctx, client, pageID)
+	// Not kept yet: show the page's own blocks as soon as they come, and
+	// bring in what is nested in them and the images right after, in the
+	// background (force), as Notion takes about three requests a second.
+	page, err := client.Page(ctx, pageID)
 	if err != nil {
 		return nil, richtext.Text{}, nil, err
 	}
-	shape.Images = loadImages(ctx, blocks)
-	s.shape = shape
+	blocks, err := client.Tree(ctx, pageID, 0)
+	if err != nil {
+		return nil, richtext.Text{}, nil, err
+	}
 	text, known, extras := doc.Build(pageID, blocks, shape)
-	s.Page, s.known = page, known
+	s.Page, s.known, s.force = page, known, true
 	s.seenTime, s.seenBy = page.LastEditedTime, page.LastEditedBy.ID
 	return s, text, extras, nil
 }

@@ -14,9 +14,9 @@ func guarded() (*richtext.Document, map[string]string) {
 	))
 	d.IdentifyParagraphs(func() string { return "new" })
 	ro := map[string]string{}
-	for _, p := range d.Text().Paragraphs() {
+	for at, p := range d.Text().Paragraphs() {
 		if p.Style.ID == "sub" {
-			ro["sub"] = signature(p)
+			ro["sub"] = paragraphText(d.Text(), at)
 		}
 	}
 	return d, ro
@@ -25,9 +25,9 @@ func guarded() (*richtext.Document, map[string]string) {
 // offset of the end of paragraph i.
 func endOf(d *richtext.Document, i int) int {
 	n := 0
-	for at, p := range d.Text().Paragraphs() {
+	for at := range d.Text().Paragraphs() {
 		if n == i {
-			return at + len([]rune(signature(p)))
+			return at + len([]rune(paragraphText(d.Text(), at)))
 		}
 		n++
 	}

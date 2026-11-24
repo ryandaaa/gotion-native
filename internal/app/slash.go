@@ -61,23 +61,15 @@ func (s *slashState) matches() []command {
 }
 
 // lineBefore returns the start of the caret's paragraph and its text up to
-// the caret.
+// the caret, found without a pass over the whole text.
 func lineBefore(d *richtext.Document) (start int, text string, ok bool) {
 	anchor, caret := d.Selection()
 	if anchor != caret {
 		return 0, "", false
 	}
-	for at, p := range d.Text().Paragraphs() {
-		var b strings.Builder
-		for _, r := range p.Runs {
-			b.WriteString(r.Text)
-		}
-		runes := []rune(b.String())
-		if caret >= at && caret <= at+len(runes) {
-			return at, string(runes[:caret-at]), true
-		}
-	}
-	return 0, "", false
+	t := d.Text()
+	start, _ = t.ParagraphRange(caret)
+	return start, t.Slice(start, caret).String(), true
 }
 
 // slashUpdate opens, narrows or closes the menu after an edit.

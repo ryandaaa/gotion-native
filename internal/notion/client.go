@@ -26,13 +26,17 @@ type Client struct {
 	HTTP  *http.Client
 	Base  string
 
-	mu   sync.Mutex
-	next time.Time // the earliest the next request may start
-	gap  time.Duration
+	// A token bucket: up to burst requests at once, then rate a second,
+	// as Notion averages three a second and lets bursts through.
+	mu          sync.Mutex
+	tokens      float64
+	last        time.Time
+	pausedUntil time.Time // after a 429, nothing goes before this
+	rate, burst float64
 }
 
 func New(token string) *Client {
-	return &Client{Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}, Base: BaseURL, gap: 350 * time.Millisecond}
+	return &Client{Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}, Base: BaseURL, rate: 2.8, burst: 8, tokens: 8}
 }
 
 // Error is an error response from Notion.
@@ -50,33 +54,45 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &e) && e.Status == 404
 }
 
-// wait blocks until the client may send another request, keeping under
-// Notion's average of three requests a second.
+// wait blocks until the client may send another request: at once while
+// the bucket holds a token, else when one comes, keeping under Notion's
+// average of three requests a second.
 func (c *Client) wait(ctx context.Context) error {
-	c.mu.Lock()
-	now := time.Now()
-	start := c.next
-	if start.Before(now) {
-		start = now
-	}
-	c.next = start.Add(c.gap)
-	c.mu.Unlock()
-	if d := time.Until(start); d > 0 {
+	for {
+		c.mu.Lock()
+		now := time.Now()
+		if c.last.IsZero() {
+			c.last = now
+		}
+		c.tokens = min(c.burst, c.tokens+now.Sub(c.last).Seconds()*c.rate)
+		c.last = now
+		var d time.Duration
+		switch {
+		case now.Before(c.pausedUntil):
+			d = c.pausedUntil.Sub(now)
+		case c.tokens >= 1:
+			c.tokens--
+			c.mu.Unlock()
+			return nil
+		default:
+			d = time.Duration((1 - c.tokens) / c.rate * float64(time.Second))
+		}
+		c.mu.Unlock()
 		select {
 		case <-time.After(d):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-	return nil
 }
 
-// pause delays every request for d, after a 429.
+// pause holds every request for d, after a 429, and empties the bucket.
 func (c *Client) pause(d time.Duration) {
 	c.mu.Lock()
-	if t := time.Now().Add(d); t.After(c.next) {
-		c.next = t
+	if t := time.Now().Add(d); t.After(c.pausedUntil) {
+		c.pausedUntil = t
 	}
+	c.tokens = 0
 	c.mu.Unlock()
 }
 
