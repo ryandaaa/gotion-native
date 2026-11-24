@@ -601,3 +601,11 @@ func (s *Session) Deletable(id string) bool {
 	}
 	return false
 }
+
+// Refresh brings the page in again at the next tick, as a change made
+// elsewhere was announced.
+func (s *Session) Refresh() {
+	s.mu.Lock()
+	s.force = true
+	s.mu.Unlock()
+}

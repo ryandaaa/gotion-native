@@ -245,6 +245,7 @@ func (a *App) signIn(c creds) {
 			saveToken(c.encode())
 			a.client, a.bot, a.tokenInput = client, me, ""
 			a.refresh()
+			a.startLive()
 		})
 	}()
 }

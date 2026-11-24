@@ -4,6 +4,12 @@ compatibility_date = "2026-11-01"
 account_id = "1c73f06b1e20ec6d3ed31016c7937acd"
 routes = [{ pattern = "gotion.ryanda.my.id", custom_domain = true }]
 
+# The webhook's verification token, the events kept per workspace, and
+# which workspace a token belongs to (by its hash).
+[[kv_namespaces]]
+binding = "EVENTS"
+id = "726f9b9ef3654dae8f44b37ab99e5841"
+
 # The landing, privacy and terms pages: served as they are, before the
 # Worker, which answers the paths no file has (/login, /callback, /refresh).
 [assets]

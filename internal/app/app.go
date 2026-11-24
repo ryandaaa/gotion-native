@@ -104,6 +104,8 @@ type App struct {
 	hpos    int
 
 	switcher switcherState
+	// liveCancel stops asking the Worker for events.
+	liveCancel context.CancelFunc
 	// oauth is a sign-in through Notion's page in progress.
 	oauth *oauthState
 	// viewer shows a picture full size.
@@ -143,6 +145,7 @@ func (a *App) Attach(w *mygo.Window) {
 		return
 	}
 	a.refresh()
+	a.startLive()
 	a.restoreTabs()
 }
 
@@ -312,6 +315,7 @@ func (a *App) checkToken() {
 }
 
 func (a *App) signOut() {
+	a.stopLive()
 	for _, p := range a.panels {
 		if p != nil && p.session != nil {
 			p.session.Close()

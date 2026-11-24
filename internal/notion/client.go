@@ -191,3 +191,6 @@ func (c *Client) renew(ctx context.Context, sent string) error {
 	c.Token = tok
 	return nil
 }
+
+// CurrentToken is the token the client sends now (renewed ones included).
+func (c *Client) CurrentToken() string { return c.token() }
