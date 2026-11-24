@@ -407,9 +407,13 @@ func (c *Client) SetTitle(ctx context.Context, id, prop, title string) error {
 // ImageURL returns the URL of an image block's file.
 func (b *Block) ImageURL() string {
 	var p struct {
-		Type     string `json:"type"`
-		File     *struct{ URL string `json:"url"` } `json:"file"`
-		External *struct{ URL string `json:"url"` } `json:"external"`
+		Type string `json:"type"`
+		File *struct {
+			URL string `json:"url"`
+		} `json:"file"`
+		External *struct {
+			URL string `json:"url"`
+		} `json:"external"`
 	}
 	json.Unmarshal(b.Payload, &p)
 	switch {
