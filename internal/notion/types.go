@@ -343,11 +343,46 @@ func (c *Client) DeleteBlock(ctx context.Context, id string) error {
 	return c.Do(ctx, "DELETE", "/blocks/"+id, nil, nil)
 }
 
-// Property is a column of a data source.
+// Property is a column of a data source. Options are the choices of a
+// select, status or multi-select.
 type Property struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"type"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Type    string   `json:"type"`
+	Options []Option `json:"-"`
+}
+
+// Option is a choice of a select, status or multi-select.
+type Option struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+func (p *Property) UnmarshalJSON(b []byte) error {
+	type plain Property
+	if err := json.Unmarshal(b, (*plain)(p)); err != nil {
+		return err
+	}
+	var m map[string]json.RawMessage
+	json.Unmarshal(b, &m)
+	var choices struct {
+		Options []Option `json:"options"`
+	}
+	if raw, ok := m[p.Type]; ok && json.Unmarshal(raw, &choices) == nil {
+		p.Options = choices.Options
+	}
+	return nil
+}
+
+// Editable reports whether a property's value can be set: not one Notion
+// computes (formulas, rollups, times and authors) nor one that points
+// elsewhere (relations, people, files).
+func (p Property) Editable() bool {
+	switch p.Type {
+	case "title", "rich_text", "number", "select", "status", "multi_select", "date", "checkbox", "url", "email", "phone_number":
+		return true
+	}
+	return false
 }
 
 // DataSource is the schema of a database's table.
@@ -463,4 +498,22 @@ func (b *Block) Cells() []string {
 		out[i] = PlainText(c)
 	}
 	return out
+}
+
+// SetProperties changes properties of a page, a row of a data source:
+// each value as Notion takes it ({"checkbox": true}, {"select": {...}}).
+func (c *Client) SetProperties(ctx context.Context, pageID string, props map[string]any) (*Page, error) {
+	var p Page
+	return &p, c.Do(ctx, "PATCH", "/pages/"+pageID, map[string]any{"properties": props}, &p)
+}
+
+// CreateRow makes a row in a data source, titled title in its title
+// property prop.
+func (c *Client) CreateRow(ctx context.Context, dataSource, prop, title string) (*Page, error) {
+	var p Page
+	body := map[string]any{
+		"parent":     map[string]any{"type": "data_source_id", "data_source_id": dataSource},
+		"properties": map[string]any{prop: titleValue(title)},
+	}
+	return &p, c.Do(ctx, "POST", "/pages", body, &p)
 }

@@ -15,7 +15,10 @@ import (
 // tableView is a data source shown read-only, as a table or as cards.
 type tableView struct {
 	id      string
+	dsID    string // the data source, where new rows go
 	title   string
+	edit    cellEdit
+	adding  newRow
 	columns []notion.Property
 	rows    []*notion.Page
 	loading bool
@@ -66,7 +69,7 @@ func (a *App) openTable(pn *panel, n *node) {
 				}
 				return ci.Name < cj.Name
 			})
-			t.rows = rows
+			t.rows, t.dsID = rows, dsID
 			if title := notion.PlainText(ds.Title); title != "" && t.title == "Memuat…" {
 				t.title = title
 			}
@@ -170,7 +173,7 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 	if view == "" {
 		view = "table"
 	}
-	a.panelHeader(c, i, iconTable, t.title, "db · read-only", func() {
+	a.panelHeader(c, i, iconTable, t.title, "database", func() {
 		if t.loading || t.err != "" {
 			return
 		}
@@ -225,12 +228,15 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 	for _, col := range t.columns {
 		total += colWidth(col)
 	}
-	cell := func(col notion.Property, last bool, body func()) {
-		e := ui.Row(c).Width(colWidth(col)).Shrink(0).Height(38).AlignItems(ui.Center).Padding(0, 10).Clip()
+	cellOf := func(key string, col notion.Property, last bool) ui.Element {
+		e := ui.Row(c.Key(key)).Width(colWidth(col)).Shrink(0).Height(38).AlignItems(ui.Center).Padding(0, 10).Clip()
 		if !last {
 			e.BorderWidth(0, 1, 0, 0).BorderColor(p.Line)
 		}
-		e.Children(body)
+		return e
+	}
+	cell := func(col notion.Property, last bool, body func()) {
+		cellOf("h"+col.Name, col, last).Children(body)
 	}
 	ui.ScrollBoth(c).Grow(1).MinHeight(0).Margin(12, 24, 16, 24).Children(func() {
 		ui.Column(c).Width(total).Border(1, p.Line).Radius(8).Clip().Children(func() {
@@ -244,33 +250,35 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 				}
 			})
 			for k, r := range t.rows {
-				row := ui.Row(c.Key("row" + r.ID)).Cursor(ui.CursorPointer)
-				if k < len(t.rows)-1 {
-					row.BorderWidth(0, 0, 1, 0).BorderColor(p.Line)
-				}
-				if row.Hovered() {
-					row.Background(p.Hover)
-				}
+				row := ui.Row(c.Key("row" + r.ID)).BorderWidth(0, 0, 1, 0).BorderColor(p.Line)
 				row.Children(func() {
 					for j, col := range t.columns {
-						cell(col, j == len(t.columns)-1, func() {
-							if col.Type == "title" {
-								if e := r.Emoji(); e != "" {
-									emoji.View(c, e, 16).MarginEnd(6)
+						e := cellOf("c"+col.Name, col, j == len(t.columns)-1)
+						if col.Type == "title" {
+							// The title opens the row as a page.
+							e.Cursor(ui.CursorPointer)
+							if e.Hovered() {
+								e.Background(p.Hover)
+							}
+							e.Children(func() {
+								if em := r.Emoji(); em != "" {
+									emoji.View(c, em, 16).MarginEnd(6)
 								} else {
 									ui.Icon(c, iconPage).Size(14, 14).TextColor(p.Faint).MarginEnd(6)
 								}
 								ui.Text(c, nonEmpty(r.Title(), "Tanpa judul")).FontSize(14).FontWeight(500).SingleLine().MinWidth(0)
-								return
+							})
+							if e.Clicked() {
+								a.openRow(i, t, r)
 							}
-							a.value(c, r.Properties[col.Name], col.Type)
-						})
+							continue
+						}
+						a.editable(c, t, r, col, e, func() { a.value(c, r.Properties[col.Name], col.Type) })
 					}
 				})
-				if row.Clicked() {
-					a.openRow(i, t, r)
-				}
+				_ = k
 			}
+			a.addRow(c, i, t)
 		})
 	})
 }
@@ -289,6 +297,7 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 				} else {
 					card.Border(1, p.Line).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.05))
 				}
+				own := false // a click on a property edits it, not opens the page
 				card.Children(func() {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						if e := r.Emoji(); e != "" {
@@ -303,14 +312,15 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 							continue
 						}
 						shown++
-						ui.Column(c).Gap(3).Children(func() {
-							ui.Text(c, col.Name).FontSize(11).TextColor(p.Faint).SingleLine()
-							a.value(c, raw, col.Type)
-						})
+						ui.Text(c, col.Name).FontSize(11).TextColor(p.Faint).SingleLine()
+						box := ui.Row(c.Key("v"+col.Name)).Padding(2, 4).Margin(-2, -4, 0, -4).Radius(5).MinHeight(22).AlignItems(ui.Center)
+						if a.editable(c, t, r, col, box, func() { a.value(c, raw, col.Type) }) {
+							own = true
+						}
 					}
 					ui.Text(c, "Diubah "+ago(r.LastEditedTime)).FontSize(11).TextColor(p.Faint)
 				})
-				if card.Clicked() {
+				if card.Clicked() && !own && !t.edit.open {
 					a.openRow(i, t, r)
 				}
 			}
