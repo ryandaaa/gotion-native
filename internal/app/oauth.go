@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gotion/internal/tr"
+	"html"
 	"net"
 	"net/http"
 	"net/url"
@@ -104,7 +106,7 @@ func refreshTokens(ctx context.Context, refresh string) (creds, error) {
 	}
 	json.NewDecoder(resp.Body).Decode(&out)
 	if resp.StatusCode != 200 || out.Access == "" {
-		return creds{}, fmt.Errorf("sesi Notion berakhir, masuk lagi: %s", out.Error)
+		return creds{}, fmt.Errorf(tr.T("sesi Notion berakhir, masuk lagi: %s"), out.Error)
 	}
 	if out.Refresh == "" {
 		out.Refresh = refresh
@@ -135,6 +137,7 @@ func (a *App) invalidate() {
 // oauthState is a sign-in in progress.
 type oauthState struct {
 	cancel context.CancelFunc
+	url    string // Notion's consent page, through the Worker, to open again
 }
 
 // startOAuth signs in through Notion's consent page: it listens on a port
@@ -146,12 +149,12 @@ func (a *App) startOAuth() {
 	}
 	base := oauthURL()
 	if base == "" {
-		a.tokenErr = "Login dengan Notion belum disiapkan (GOTION_OAUTH_URL). Pakai token dulu."
+		a.tokenErr = tr.T("Login dengan Notion belum disiapkan (GOTION_OAUTH_URL). Pakai token dulu.")
 		return
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		a.tokenErr = "Tidak bisa menyiapkan login: " + err.Error()
+		a.tokenErr = tr.T("Tidak bisa menyiapkan login: ") + err.Error()
 		return
 	}
 	b := make([]byte, 24)
@@ -173,30 +176,31 @@ func (a *App) startOAuth() {
 		r.ParseForm()
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		page := func(title, text string) {
-			fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>gotion</title><body style="font:15px system-ui;display:grid;place-items:center;height:90vh;color:#444"><div><h2>%s</h2><p>%s</p></div></body>`, title, text)
+			fmt.Fprintf(w, browserPage, tr.Lang(), html.EscapeString(title), html.EscapeString(text))
 		}
 		// Only the post that carries this sign-in's state counts.
 		if r.PostFormValue("state") != state {
-			page("Login tidak dikenali", "Mulai lagi dari gotion.")
+			page(tr.T("Login tidak dikenali"), tr.T("Mulai lagi dari gotion."))
 			return
 		}
 		if e := r.PostFormValue("error"); e != "" {
-			page("Login batal", "Kembali ke gotion untuk mencoba lagi.")
+			page(tr.T("Login batal"), tr.T("Kembali ke gotion untuk mencoba lagi."))
 			failed <- e
 			return
 		}
 		c := creds{Access: r.PostFormValue("access_token"), Refresh: r.PostFormValue("refresh_token"), Workspace: r.PostFormValue("workspace_name")}
 		if c.Access == "" {
-			page("Login gagal", "Notion tidak memberi token. Coba lagi dari gotion.")
-			failed <- "tidak ada token"
+			page(tr.T("Login gagal"), tr.T("Notion tidak memberi token. Coba lagi dari gotion."))
+			failed <- tr.T("tidak ada token")
 			return
 		}
-		page("Berhasil masuk", "Silakan kembali ke gotion. Tab ini boleh ditutup.")
+		page(tr.T("Berhasil masuk"), tr.T("Silakan kembali ke gotion. Tab ini boleh ditutup."))
 		result <- c
 	})
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go srv.Serve(ln)
-	openBrowser(fmt.Sprintf("%s/login?port=%d&state=%s", base, port, url.QueryEscape(state)))
+	a.oauth.url = fmt.Sprintf("%s/login?port=%d&state=%s", base, port, url.QueryEscape(state))
+	openBrowser(a.oauth.url)
 
 	go func() {
 		var c creds
@@ -206,7 +210,7 @@ func (a *App) startOAuth() {
 		case msg = <-failed:
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				msg = "Login kelamaan, coba lagi."
+				msg = tr.T("Login kelamaan, coba lagi.")
 			}
 		}
 		// Let the browser get its page before the listener goes.
@@ -239,7 +243,7 @@ func (a *App) signIn(c creds) {
 		a.update(func() {
 			a.checking = false
 			if err != nil {
-				a.tokenErr = "Notion menolak: " + errText(err)
+				a.tokenErr = tr.T("Notion menolak: ") + errText(err)
 				return
 			}
 			saveToken(c.encode())
@@ -249,3 +253,12 @@ func (a *App) signIn(c creds) {
 		})
 	}()
 }
+
+// browserPage is what the browser shows when Notion hands the sign-in back:
+// gotion's mark, what happened and what to do next.
+const browserPage = `<!doctype html><html lang="%s"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>gotion</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f5f4;color:#1d1d1f;font:16px/1.5 Inter,system-ui,sans-serif}
+main{max-width:360px;padding:24px;text-align:center}h1{font-size:22px;margin:16px 0 6px}p{margin:0;color:#57534e}
+@media (prefers-color-scheme:dark){body{background:#1c1c1e;color:#ededec}p{color:#a8a29e}}</style>
+<main><svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true"><rect x="1" y="1" width="62" height="62" rx="14" fill="#fff" stroke="#e4e2df" stroke-width="2"/><rect x="14" y="16" width="30" height="7" rx="3.5" fill="#1d1d1f"/><rect x="14" y="29" width="36" height="5" rx="2.5" fill="#b5b2ad"/><rect x="14" y="40" width="26" height="5" rx="2.5" fill="#b5b2ad"/><rect x="43" y="38" width="2.5" height="9" rx="1.25" fill="#2563eb"/></svg>
+<h1>%s</h1><p>%s</p></main></html>`

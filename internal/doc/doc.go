@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"gotion/internal/tr"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -155,7 +156,7 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 	case "child_page":
 		title := strings.TrimSpace(p.Title)
 		if title == "" {
-			title = "Tanpa judul"
+			title = tr.T("Tanpa judul")
 		}
 		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("page")}, link("page/", title)...)}
 	case "image":
@@ -168,15 +169,15 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
 				Attributes: richtext.Attributes{Link: LinkPrefix + "image/" + b.ID, Attachment: &richtext.Attachment{Image: img, Width: w, Height: h, Name: "image"}}}}}
 		}
-		runs := link("open/", "🖼 Gambar — buka di Notion ↗")
+		runs := link("open/", tr.T("🖼 Gambar: buka di Notion ↗"))
 		runs[0].Attributes.Color = muted.Color
 		return richtext.Paragraph{Style: st, Runs: runs}
 	case "file", "pdf", "video", "audio":
 		name, _ := b.FileInfo()
 		if name == "" {
-			name = "Lampiran"
+			name = tr.T("Lampiran")
 		}
-		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("file")}, link("file/", name+" — unduh")...)}
+		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("file")}, link("file/", name+tr.T(" (unduh)"))...)}
 	case "table":
 		if len(b.Children) > 0 {
 			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
@@ -185,11 +186,11 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 	case "child_database":
 		title := strings.TrimSpace(p.Title)
 		if title == "" || title == "-" {
-			title = "Database tanpa judul"
+			title = tr.T("Database tanpa judul")
 		}
 		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("table")}, link("db/", title)...)}
 	}
-	label := "Block " + strings.ReplaceAll(b.Type, "_", " ") + " — buka di Notion ↗"
+	label := tr.T("Block ") + strings.ReplaceAll(b.Type, "_", " ") + tr.T(": buka di Notion ↗")
 	runs := link("open/", label)
 	runs[0].Attributes.Color, runs[0].Attributes.Italic = muted.Color, true
 	return richtext.Paragraph{Style: st, Runs: runs}

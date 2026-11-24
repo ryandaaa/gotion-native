@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"gotion/internal/tr"
 	"io"
 	"net/http"
 	"os"
@@ -55,11 +57,11 @@ func (a *App) upload(pn *panel, name string, data []byte, after string) {
 		return
 	}
 	if limit := a.uploadLimit(); int64(len(data)) > limit {
-		a.toast(fmt.Sprintf("%s terlalu besar (%s): batas workspace ini %s per file.", name, sizeText(int64(len(data))), sizeText(limit)))
+		a.toast(fmt.Sprintf(tr.T("%s terlalu besar (%s): batas workspace ini %s per file."), name, sizeText(int64(len(data))), sizeText(limit)))
 		return
 	}
 	ctype := notion.ContentType(name, data)
-	a.toast("Mengunggah " + name + "…")
+	a.toast(tr.T("Mengunggah ") + name + "…")
 	client, s := a.client, pn.session
 	go func() {
 		ctx := context.Background()
@@ -69,10 +71,10 @@ func (a *App) upload(pn *panel, name string, data []byte, after string) {
 		}
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal mengunggah " + name + ": " + errText(err))
+				a.toast(tr.T("Gagal mengunggah ") + name + ": " + errText(err))
 				return
 			}
-			a.toast(name + " ditambahkan")
+			a.toast(name + tr.T(" ditambahkan"))
 		})
 	}()
 }
@@ -97,12 +99,12 @@ func (a *App) dropFiles(pn *panel, paths []string) {
 			continue
 		}
 		if st.Size() > a.uploadLimit() {
-			a.toast(fmt.Sprintf("%s terlalu besar (%s): batas workspace ini %s per file.", filepath.Base(path), sizeText(st.Size()), sizeText(a.uploadLimit())))
+			a.toast(fmt.Sprintf(tr.T("%s terlalu besar (%s): batas workspace ini %s per file."), filepath.Base(path), sizeText(st.Size()), sizeText(a.uploadLimit())))
 			continue
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			a.toast("Tidak bisa membaca " + filepath.Base(path))
+			a.toast(tr.T("Tidak bisa membaca ") + filepath.Base(path))
 			continue
 		}
 		a.upload(pn, filepath.Base(path), data, after)
@@ -112,7 +114,7 @@ func (a *App) dropFiles(pn *panel, paths []string) {
 // download saves a file block's file in the Downloads folder and shows it
 // there. Its URL lasts an hour, so the block is fetched again first.
 func (a *App) download(id string) {
-	a.toast("Mengunduh…")
+	a.toast(tr.T("Mengunduh…"))
 	client := a.client
 	go func() {
 		path, err := func() (string, error) {
@@ -123,7 +125,7 @@ func (a *App) download(id string) {
 			}
 			name, url := b.FileInfo()
 			if url == "" {
-				return "", fmt.Errorf("lampiran ini tidak punya file")
+				return "", errors.New(tr.T("lampiran ini tidak punya file"))
 			}
 			dir, err := mygo.App.Path(mygo.PathDownloads)
 			if err != nil || dir == "" {
@@ -155,10 +157,10 @@ func (a *App) download(id string) {
 		}()
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal mengunduh: " + errText(err))
+				a.toast(tr.T("Gagal mengunduh: ") + errText(err))
 				return
 			}
-			a.toast("Tersimpan di " + path)
+			a.toast(tr.T("Tersimpan di ") + path)
 			mygo.Shell.ShowItemInFolder(path)
 		})
 	}()
@@ -205,9 +207,9 @@ func (a *App) viewerView(c *ui.Context) {
 	scrim.Children(func() {
 		ui.Image(c, v.img).Fit(ui.Contain).Grow(1).MinHeight(0).FillWidth().Radius(6).Transition(popIn)
 		ui.Row(c).Gap(16).AlignItems(ui.Center).Margin(14, 0, 0, 0).Children(func() {
-			ui.Text(c, "Klik di mana saja atau tekan Esc untuk menutup").FontSize(12).TextColor(ui.RGBA(255, 255, 255, 0.6))
+			ui.Text(c, tr.T("Klik di mana saja atau tekan Esc untuk menutup")).FontSize(12).TextColor(ui.RGBA(255, 255, 255, 0.6))
 			if pn := a.panels[v.panel]; v.id != "" && pn != nil && pn.session != nil && pn.session.Deletable(v.id) {
-				del := ui.Text(c.Key("delete-image"), "Hapus gambar").FontSize(13).FontWeight(500).
+				del := ui.Text(c.Key("delete-image"), tr.T("Hapus gambar")).FontSize(13).FontWeight(500).
 					TextColor(ui.Hex("#ffb4ab")).Padding(6, 12).Radius(7).Background(ui.RGBA(255, 255, 255, 0.1)).Cursor(ui.CursorPointer)
 				if del.Hovered() {
 					del.Background(ui.RGBA(255, 255, 255, 0.18))
@@ -216,7 +218,7 @@ func (a *App) viewerView(c *ui.Context) {
 					removed = true
 					if removeParagraph(pn.doc, v.id) {
 						a.edited(pn)
-						a.toast("Gambar dihapus dari halaman")
+						a.toast(tr.T("Gambar dihapus dari halaman"))
 					}
 				}
 			}

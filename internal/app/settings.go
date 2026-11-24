@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gotion/internal/tr"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,7 +47,7 @@ func (a *App) appearance(c *ui.Context) {
 	ui.Column(c).Gap(8).Children(func() {
 		ui.Text(c, "Mode").FontSize(12).FontWeight(600).TextColor(p.Faint)
 		ui.Row(c).Gap(2).Padding(2).Radius(8).Background(p.Sidebar).Children(func() {
-			for _, m := range []struct{ id, label string }{{"system", "Sistem"}, {"light", "Terang"}, {"dark", "Gelap"}} {
+			for _, m := range []struct{ id, label string }{{"system", tr.T("Sistem")}, {"light", tr.T("Terang")}, {"dark", tr.T("Gelap")}} {
 				o := ui.Text(c.Key("mode"+m.id), m.label).FontSize(13).Padding(5, 0).Grow(1).TextAlign(ui.Center).Radius(6).Cursor(ui.CursorPointer)
 				if a.set.Theme == m.id || a.set.Theme == "" && m.id == "system" {
 					o.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
@@ -61,7 +62,7 @@ func (a *App) appearance(c *ui.Context) {
 		})
 	})
 	ui.Column(c).Gap(8).Children(func() {
-		ui.Text(c, "Warna latar").FontSize(12).FontWeight(600).TextColor(p.Faint)
+		ui.Text(c, tr.T("Warna latar")).FontSize(12).FontWeight(600).TextColor(p.Faint)
 		ui.Row(c).Wrap().Gap(8).Children(func() {
 			for _, w := range washes {
 				cur := a.set.Wash == w.id || a.set.Wash == "" && w.plain()
@@ -71,18 +72,18 @@ func (a *App) appearance(c *ui.Context) {
 				}
 			}
 		})
-		ui.Text(c, washByID(a.set.Wash).label).FontSize(12).TextColor(p.Muted)
+		ui.Text(c, tr.T(washByID(a.set.Wash).label)).FontSize(12).TextColor(p.Muted)
 	})
 	ui.Column(c).Gap(6).Children(func() {
 		on := a.set.Glass
 		ok := glassSupported()
-		if ui.Checkbox(c, &on, "Kaca (blur) di sekitar kartu").Disabled(!ok).Changed() && ok {
+		if ui.Checkbox(c, &on, tr.T("Kaca (blur) di sekitar kartu")).Disabled(!ok).Changed() && ok {
 			a.set.Glass = on
 			a.saveSettings()
 			a.applyGlass()
 		}
 		if !ok {
-			ui.Text(c, "Belum didukung di Linux: sistemnya tidak menyediakan efek kaca. Tersedia di macOS dan Windows 11.").
+			ui.Text(c, tr.T("Belum didukung di Linux: sistemnya tidak menyediakan efek kaca. Tersedia di macOS dan Windows 11.")).
 				FontSize(11).TextColor(p.Faint)
 		}
 	})
@@ -107,8 +108,8 @@ func (a *App) settingsDialog(c *ui.Context) {
 		}
 		card.Children(func() {
 			ui.Column(c).Width(190).Shrink(0).Padding(18, 10).Gap(2).Background(p.Sidebar).Children(func() {
-				ui.Text(c, "Pengaturan").FontSize(15).FontWeight(600).Padding(0, 10, 12, 10)
-				for _, sec := range []struct{ id, label string }{{"tampilan", "Tampilan"}, {"akun", "Akun"}, {"tentang", "Tentang"}} {
+				ui.Text(c, tr.T("Pengaturan")).FontSize(15).FontWeight(600).Padding(0, 10, 12, 10)
+				for _, sec := range []struct{ id, label string }{{"tampilan", tr.T("Tampilan")}, {"akun", tr.T("Akun")}, {"tentang", tr.T("Tentang")}} {
 					r := ui.Text(c.Key("sec"+sec.id), sec.label).FontSize(14).Padding(7, 10).Radius(7).Cursor(ui.CursorPointer)
 					if s.section == sec.id {
 						r.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
@@ -123,7 +124,7 @@ func (a *App) settingsDialog(c *ui.Context) {
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				ui.Row(c).Padding(14, 14, 0, 28).AlignItems(ui.Center).Children(func() {
 					ui.Box(c).Grow(1)
-					if iconButton(c, p, iconClose, "Tutup (Esc)") {
+					if iconButton(c, p, iconClose, tr.T("Tutup (Esc)")) {
 						s.open = false
 					}
 				})
@@ -159,8 +160,12 @@ func (a *App) sectionTitle(c *ui.Context, title, sub string) {
 
 func (a *App) appearanceSection(c *ui.Context) {
 	p := a.pal()
-	a.sectionTitle(c, "Tampilan", "Bagaimana jendela gotion terlihat.")
+	a.sectionTitle(c, tr.T("Tampilan"), tr.T("Bagaimana jendela gotion terlihat."))
 	a.appearance(c)
+	ui.Column(c).Gap(8).Children(func() {
+		ui.Text(c, "Bahasa · Language").FontSize(12).FontWeight(600).TextColor(p.Faint)
+		a.languagePicker(c)
+	})
 	ui.Column(c).Gap(8).Children(func() {
 		ui.Text(c, "Zoom").FontSize(12).FontWeight(600).TextColor(p.Faint)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -171,7 +176,7 @@ func (a *App) appearanceSection(c *ui.Context) {
 			if a.btn(c, "+", nil, false, false) {
 				a.zoom(+1)
 			}
-			if a.btn(c, "Atur ulang", nil, false, a.set.Zoom > 0.99 && a.set.Zoom < 1.01) {
+			if a.btn(c, tr.T("Atur ulang"), nil, false, a.set.Zoom > 0.99 && a.set.Zoom < 1.01) {
 				a.zoom(0)
 			}
 			ui.Text(c, "Ctrl+= · Ctrl+- · Ctrl+0").FontSize(12).TextColor(p.Faint)
@@ -179,58 +184,66 @@ func (a *App) appearanceSection(c *ui.Context) {
 	})
 	ui.Column(c).Gap(6).Children(func() {
 		full := a.set.FullWidth
-		if ui.Checkbox(c, &full, "Teks halaman selebar panel").Changed() {
+		if ui.Checkbox(c, &full, tr.T("Teks halaman selebar panel")).Changed() {
 			a.set.FullWidth = full
 			a.saveSettings()
 		}
-		ui.Text(c, "Mati: teks di tengah selebar baca yang nyaman, seperti Notion.").FontSize(12).TextColor(p.Faint)
+		ui.Text(c, tr.T("Mati: teks di tengah selebar baca yang nyaman, seperti Notion.")).FontSize(12).TextColor(p.Faint)
 	})
 }
 
 func (a *App) accountSection(c *ui.Context) {
 	p := a.pal()
 	s := &a.settings
-	a.sectionTitle(c, "Akun", "Workspace Notion yang terhubung ke gotion.")
+	a.sectionTitle(c, tr.T("Akun"), tr.T("Workspace Notion yang terhubung ke gotion."))
 	ui.Column(c).Gap(10).Padding(14, 16).Radius(10).Background(p.Sidebar).Children(func() {
 		name := "Workspace"
 		if a.bot != nil && a.bot.Bot != nil && a.bot.Bot.WorkspaceName != "" {
 			name = a.bot.Bot.WorkspaceName
 		}
 		ui.Text(c, name).FontSize(15).FontWeight(600)
-		how := "Masuk dengan token integrasi"
+		how := tr.T("Masuk dengan token integrasi")
 		if a.client != nil && a.client.Refresh != nil {
-			how = "Masuk dengan akun Notion"
+			how = tr.T("Masuk dengan akun Notion")
 		}
 		ui.Text(c, how).FontSize(13).TextColor(p.Muted)
 		if a.bot != nil && a.bot.Bot != nil {
 			if l := a.bot.Bot.WorkspaceLimits.MaxFileUploadSize; l > 0 {
-				ui.Text(c, "Batas unggah per file: "+sizeText(l)).FontSize(13).TextColor(p.Muted)
+				ui.Text(c, tr.T("Batas unggah per file: ")+sizeText(l)).FontSize(13).TextColor(p.Muted)
 			}
 		}
 	})
+	if a.client != nil && a.client.Refresh != nil && oauthURL() != "" {
+		ui.Column(c).Gap(6).Children(func() {
+			if a.btn(c, tr.T("Pilih halaman lain"), nil, false, a.oauth != nil) {
+				a.startOAuth()
+			}
+			ui.Text(c, tr.T("Buka halaman izin Notion untuk menambah atau mengurangi halaman yang boleh dibuka gotion.")).FontSize(12).TextColor(p.Faint)
+		})
+	}
 	a.members(c)
 	ui.Column(c).Gap(6).Children(func() {
-		if a.btnRow(c, func() bool { return a.btn(c, "Hapus cache halaman", iconTrash, false, false) }) {
+		if a.btnRow(c, func() bool { return a.btn(c, tr.T("Hapus cache halaman"), iconTrash, false, false) }) {
 			os.RemoveAll(filepath.Join(configDir(), "cache"))
-			a.toast("Cache dihapus: halaman dimuat ulang dari Notion saat dibuka")
+			a.toast(tr.T("Cache dihapus: halaman dimuat ulang dari Notion saat dibuka"))
 		}
-		ui.Text(c, "Salinan halaman di komputer ini. Edit yang belum terkirim ikut terhapus.").FontSize(12).TextColor(p.Faint)
+		ui.Text(c, tr.T("Salinan halaman di komputer ini. Edit yang belum terkirim ikut terhapus.")).FontSize(12).TextColor(p.Faint)
 	})
 	ui.Column(c).Gap(8).Children(func() {
 		if !s.confirm {
-			if a.btnRow(c, func() bool { return a.btn(c, "Keluar", iconLogout, true, false) }) {
+			if a.btnRow(c, func() bool { return a.btn(c, tr.T("Keluar"), iconLogout, true, false) }) {
 				s.confirm = true
 			}
-			ui.Text(c, "Menghapus token dan salinan halaman dari komputer ini. Halamanmu di Notion tidak berubah.").FontSize(12).TextColor(p.Faint)
+			ui.Text(c, tr.T("Menghapus token dan salinan halaman dari komputer ini. Halamanmu di Notion tidak berubah.")).FontSize(12).TextColor(p.Faint)
 			return
 		}
-		ui.Text(c, "Yakin keluar? Edit yang belum terkirim akan dikirim dulu.").FontSize(13)
+		ui.Text(c, tr.T("Yakin keluar? Edit yang belum terkirim akan dikirim dulu.")).FontSize(13)
 		ui.Row(c).Gap(8).Children(func() {
-			if ui.PrimaryButton(c, "Keluar").Clicked() {
+			if ui.PrimaryButton(c, tr.T("Keluar")).Clicked() {
 				s.open = false
 				a.signOut()
 			}
-			if a.btn(c, "Batal", nil, false, false) {
+			if a.btn(c, tr.T("Batal"), nil, false, false) {
 				s.confirm = false
 			}
 		})
@@ -239,13 +252,13 @@ func (a *App) accountSection(c *ui.Context) {
 
 func (a *App) aboutSection(c *ui.Context) {
 	p := a.pal()
-	a.sectionTitle(c, "Tentang gotion", "Notion di desktop, ringan dan native.")
-	ui.Text(c, "Versi "+Version).FontSize(14)
+	a.sectionTitle(c, tr.T("Tentang gotion"), tr.T("Notion di desktop, ringan dan native."))
+	ui.Text(c, tr.T("Versi ")+Version).FontSize(14)
 	ui.Column(c).Gap(6).Children(func() {
 		for _, l := range []struct{ label, url string }{
-			{"Situs gotion", "https://gotion.ryanda.my.id"},
-			{"Kebijakan Privasi", "https://gotion.ryanda.my.id/privacy"},
-			{"Ketentuan", "https://gotion.ryanda.my.id/terms"},
+			{tr.T("Situs gotion"), "https://gotion.ryanda.my.id"},
+			{tr.T("Kebijakan Privasi"), "https://gotion.ryanda.my.id/privacy"},
+			{tr.T("Ketentuan"), "https://gotion.ryanda.my.id/terms"},
 		} {
 			if ui.Link(c, l.label+" ↗", "").FontSize(14).Clicked() {
 				go mygo.Shell.OpenExternal(l.url)
@@ -253,12 +266,12 @@ func (a *App) aboutSection(c *ui.Context) {
 		}
 	})
 	ui.Column(c).Gap(4).Children(func() {
-		ui.Text(c, "Atribusi").FontSize(12).FontWeight(600).TextColor(p.Faint)
+		ui.Text(c, tr.T("Atribusi")).FontSize(12).FontWeight(600).TextColor(p.Faint)
 		for _, line := range []string{
-			"Emoji: Twemoji, © Twitter, Inc. dan kontributor, CC-BY 4.0.",
-			"Huruf: Inter, SIL Open Font License 1.1.",
-			"Dibangun dengan MyGo (MIT).",
-			"Tidak berafiliasi dengan Notion Labs, Inc.",
+			tr.T("Emoji: Twemoji, © Twitter, Inc. dan kontributor, CC-BY 4.0."),
+			tr.T("Huruf: Inter, SIL Open Font License 1.1."),
+			tr.T("Dibangun dengan MyGo (MIT)."),
+			tr.T("Tidak berafiliasi dengan Notion Labs, Inc."),
 		} {
 			ui.Text(c, line).FontSize(13).TextColor(p.Muted)
 		}
@@ -274,18 +287,18 @@ func (a *App) members(c *ui.Context) {
 		a.loadMembers()
 	}
 	ui.Column(c).Gap(8).Children(func() {
-		ui.Text(c, "Anggota workspace").FontSize(12).FontWeight(600).TextColor(p.Faint)
+		ui.Text(c, tr.T("Anggota workspace")).FontSize(12).FontWeight(600).TextColor(p.Faint)
 		switch {
 		case s.membersLoading:
 			ui.Spinner(c).Size(16, 16)
 		case s.membersErr != "":
 			ui.Text(c, s.membersErr).FontSize(12).TextColor(p.Faint)
 		case len(s.members) == 0:
-			ui.Text(c, "Tidak ada anggota yang terlihat.").FontSize(12).TextColor(p.Faint)
+			ui.Text(c, tr.T("Tidak ada anggota yang terlihat.")).FontSize(12).TextColor(p.Faint)
 		}
 		for _, u := range s.members {
 			ui.Row(c.Key("m" + u.ID)).Gap(10).AlignItems(ui.Center).Children(func() {
-				name := nonEmpty(u.Name, "Tanpa nama")
+				name := nonEmpty(u.Name, tr.T("Tanpa nama"))
 				initial := strings.ToUpper(string([]rune(name)[:1]))
 				ui.Box(c).Size(26, 26).Radius(13).Background(p.Accent.Alpha(0.16)).Center().Children(func() {
 					ui.Text(c, initial).FontSize(12).FontWeight(600).TextColor(p.Accent)
@@ -316,7 +329,7 @@ func (a *App) loadMembers() {
 			if err != nil {
 				var e *notion.Error
 				if errors.As(err, &e) && e.Status == 403 {
-					s.membersErr = "Integrasi ini belum boleh melihat anggota. Aktifkan “Read user information” di pengaturan integrasi Notion."
+					s.membersErr = tr.T("Integrasi ini belum boleh melihat anggota. Aktifkan “Read user information” di pengaturan integrasi Notion.")
 				} else {
 					s.membersErr = errText(err)
 				}

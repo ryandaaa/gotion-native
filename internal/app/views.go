@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"gotion/internal/tr"
 	"path/filepath"
 	"strings"
 	"time"
@@ -168,7 +169,7 @@ func (a *App) cycleTheme() {
 	}
 	a.set.Theme = next
 	a.saveSettings()
-	a.toast(map[string]string{"system": "Tema: ikut sistem", "light": "Tema: terang", "dark": "Tema: gelap"}[next])
+	a.toast(map[string]string{"system": tr.T("Tema: ikut sistem"), "light": tr.T("Tema: terang"), "dark": tr.T("Tema: gelap")}[next])
 }
 
 // titleBar is the bar the window controls sit in: it drags the window.
@@ -181,14 +182,14 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 			ui.Text(c, "gotion").FontSize(14).FontWeight(600)
 			return
 		}
-		if iconButton(c, p, iconSidebar, "Sidebar (Ctrl+\\)") {
+		if iconButton(c, p, iconSidebar, tr.T("Sidebar (Ctrl+\\)")) {
 			a.set.SidebarOff = !a.set.SidebarOff
 			a.saveSettings()
 		}
-		if navButton(c, p, iconBack, "Kembali (Ctrl+[)", a.hpos > 0) {
+		if navButton(c, p, iconBack, tr.T("Kembali (Ctrl+[)"), a.hpos > 0) {
 			a.back()
 		}
-		if navButton(c, p, iconForward, "Maju (Ctrl+])", a.hpos < len(a.history)-1) {
+		if navButton(c, p, iconForward, tr.T("Maju (Ctrl+])"), a.hpos < len(a.history)-1) {
 			a.forward()
 		}
 		a.breadcrumbs(c)
@@ -196,7 +197,7 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 		search := ui.Row(c.Key("search")).AlignItems(ui.Center).Gap(8).Padding(5, 12).Radius(8).Background(p.Hover).
 			Cursor(ui.CursorPointer).Width(260).Children(func() {
 			ui.Icon(c, iconSearch).Size(14, 14).TextColor(p.Faint)
-			ui.Text(c, "Cari halaman…").FontSize(13).TextColor(p.Faint).Grow(1)
+			ui.Text(c, tr.T("Cari halaman…")).FontSize(13).TextColor(p.Faint).Grow(1)
 			ui.Text(c, "Ctrl K").FontSize(11).TextColor(p.Faint)
 		})
 		if search.Clicked() {
@@ -208,7 +209,7 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 		}
 		if z := a.set.Zoom; z < 0.99 || z > 1.01 {
 			b := ui.Text(c.Key("zoom"), fmt.Sprintf("%d%%", int(z*100+0.5))).FontSize(12).TextColor(p.Muted).
-				Padding(3, 8).Radius(6).Cursor(ui.CursorPointer).Tooltip("Kembali ke 100% (Ctrl+0)")
+				Padding(3, 8).Radius(6).Cursor(ui.CursorPointer).Tooltip(tr.T("Kembali ke 100% (Ctrl+0)"))
 			if b.Hovered() {
 				b.Background(p.Hover)
 			}
@@ -216,7 +217,7 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 				a.zoom(0)
 			}
 		}
-		if iconButton(c, p, iconRefresh, "Muat ulang (Ctrl+R)") {
+		if iconButton(c, p, iconRefresh, tr.T("Muat ulang (Ctrl+R)")) {
 			a.refresh()
 		}
 		a.themeButton(c)
@@ -262,77 +263,6 @@ func (a *App) breadcrumbs(c *ui.Context) {
 	})
 }
 
-// onboarding asks for the integration token.
-func (a *App) onboarding(c *ui.Context) {
-	p := a.pal()
-	step := func(n string, body func()) {
-		ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
-			ui.Box(c).Size(24, 24).Shrink(0).Radius(12).Background(p.Text).Center().Children(func() {
-				ui.Text(c, n).FontSize(12).FontWeight(600).TextColor(p.Panel)
-			})
-			ui.Column(c).Grow(1).Gap(8).Children(body)
-		})
-	}
-	ui.Column(c).Grow(1).Center().Background(p.Window).Children(func() {
-		ui.Column(c).Width(520).Padding(32, 36).Gap(22).Background(p.Panel).Radius(14).
-			Shadow(0, 8, 30, 0, ui.RGBA(0, 0, 0, 0.10)).Children(func() {
-			ui.Column(c).Gap(6).Children(func() {
-				ui.Text(c, "Hubungkan ke Notion").FontSize(22).FontWeight(700)
-				ui.Text(c, "Setup sekali, sekitar 2 menit. Token disimpan di keychain sistem.").FontSize(14).TextColor(p.Muted)
-			})
-			if oauthURL() != "" {
-				ui.Column(c).Gap(10).Children(func() {
-					if a.oauth != nil {
-						ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-							ui.Spinner(c).Size(16, 16)
-							ui.Text(c, "Lanjutkan login di browser…").FontSize(14).TextColor(p.Muted).Grow(1)
-							if a.btn(c, "Batal", nil, false, false) {
-								a.cancelOAuth()
-							}
-						})
-					} else if ui.PrimaryButton(c, "Masuk dengan Notion").Padding(10, 16).Disabled(a.checking).Clicked() {
-						a.startOAuth()
-					}
-					ui.Text(c, "Pilih halaman yang boleh dibuka gotion di halaman Notion yang muncul.").FontSize(12).TextColor(p.Faint)
-				})
-				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-					ui.Box(c).Height(1).Grow(1).Background(p.Line)
-					ui.Text(c, "atau pakai token integrasi").FontSize(12).TextColor(p.Faint)
-					ui.Box(c).Height(1).Grow(1).Background(p.Line)
-				})
-			}
-			step("1", func() {
-				ui.Text(c, "Buat integrasi baru di Notion").FontSize(14)
-				if ui.Link(c, "Buka halaman integrasi ↗", "").FontWeight(500).Clicked() {
-					go mygo.Shell.OpenExternal("https://www.notion.so/profile/integrations")
-				}
-			})
-			step("2", func() {
-				ui.Text(c, "Tempel Internal Integration Secret").FontSize(14)
-				ui.Row(c).Gap(8).Children(func() {
-					in := ui.TextInput(c, &a.tokenInput).Password().Placeholder("ntn_…").Grow(1).Label("Token").AutoFocus().Border(1, p.Faint.Alpha(0.5))
-					if (in.Submitted() || a.btn(c, "Cek", nil, false, a.checking)) && !a.checking {
-						a.checkToken()
-					}
-				})
-				switch {
-				case a.checking:
-					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						ui.Spinner(c).Size(14, 14)
-						ui.Text(c, "Mengecek…").FontSize(13).TextColor(p.Muted)
-					})
-				case a.tokenErr != "":
-					ui.Text(c, a.tokenErr).FontSize(13).TextColor(c.Theme().Danger)
-				}
-			})
-			step("3", func() {
-				ui.Text(c, "Di Notion, buka page yang mau dipakai → ••• → Connections → pilih integrasi ini. Sub-page ikut otomatis.").
-					FontSize(14).TextColor(p.Muted)
-			})
-		})
-	})
-}
-
 // sidebar is the page tree.
 func (a *App) sidebar(c *ui.Context) {
 	p := a.pal()
@@ -359,8 +289,8 @@ func (a *App) sidebar(c *ui.Context) {
 			}
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(6).Padding(10, 8, 6, 10).Children(func() {
-			ui.Text(c, "Halaman").FontSize(12).FontWeight(600).TextColor(p.Faint).Grow(1)
-			if iconButton(c, p, iconPlus, "Halaman baru di halaman ini (Ctrl+N)") {
+			ui.Text(c, tr.T("Halaman")).FontSize(12).FontWeight(600).TextColor(p.Faint).Grow(1)
+			if iconButton(c, p, iconPlus, tr.T("Halaman baru di halaman ini (Ctrl+N)")) {
 				if pn := a.panels[a.focus]; pn != nil {
 					a.newPage(pn.id)
 				}
@@ -374,9 +304,9 @@ func (a *App) sidebar(c *ui.Context) {
 			r := rows[i]
 			switch r.kind {
 			case "error":
-				ui.Text(c, "Gagal memuat: "+a.loadErr).FontSize(12).TextColor(c.Theme().Danger).Padding(4, 10)
+				ui.Text(c, tr.T("Gagal memuat: ")+a.loadErr).FontSize(12).TextColor(c.Theme().Danger).Padding(4, 10)
 			case "empty":
-				ui.Text(c, "Belum ada halaman yang terhubung. Di Notion: ••• → Connections → pilih integrasi kamu.").
+				ui.Text(c, tr.T("Belum ada halaman yang terhubung. Di Notion: ••• → Connections → pilih integrasi kamu.")).
 					FontSize(12).TextColor(p.Faint).Padding(4, 10)
 			case "group":
 				a.groupHeader(c, r.n)
@@ -385,9 +315,9 @@ func (a *App) sidebar(c *ui.Context) {
 			default:
 				a.item(c, r.n, r.depth)
 			}
-		}).Grow(1).Label("Halaman").ScrollbarStyle(a.thinScrollbar()).Padding(0, 10, 0, 0)
+		}).Grow(1).Label(tr.T("Halaman")).ScrollbarStyle(a.thinScrollbar()).Padding(0, 10, 0, 0)
 		ui.Row(c).AlignItems(ui.Center).Gap(2).Padding(6, 4, 0, 4).Children(func() {
-			if iconButton(c, p, iconSettings, "Pengaturan (Ctrl+,)") {
+			if iconButton(c, p, iconSettings, tr.T("Pengaturan (Ctrl+,)")) {
 				a.openSettings("")
 			}
 			ui.Box(c).Grow(1)
@@ -536,9 +466,9 @@ func (a *App) item(c *ui.Context, n *node, depth int) {
 		ui.Text(c, n.Title).FontSize(14).SingleLine().Grow(1).MinWidth(0)
 		if hovered {
 			if n.Kind == "page" {
-				added = smallButton(c, p, iconPlus, "Halaman baru di dalamnya")
+				added = smallButton(c, p, iconPlus, tr.T("Halaman baru di dalamnya"))
 			}
-			beside = smallButton(c, p, iconSplit, "Buka di samping")
+			beside = smallButton(c, p, iconSplit, tr.T("Buka di samping"))
 			return
 		}
 		if n.Kind != "page" {
@@ -687,10 +617,14 @@ func (a *App) panelView(c *ui.Context, i int) {
 
 func (a *App) empty(c *ui.Context) {
 	p := a.pal()
+	if !a.hasPages() {
+		a.noPages(c)
+		return
+	}
 	ui.Column(c).Fill().Center().Gap(10).Children(func() {
 		ui.Icon(c, iconPage).Size(28, 28).TextColor(p.Faint)
-		ui.Text(c, "Pilih halaman di sidebar").FontSize(15).TextColor(p.Muted)
-		ui.Text(c, "Ctrl+K cari · Ctrl+N halaman baru · Ctrl+\\ sidebar · Ctrl+klik buka di samping").FontSize(12).TextColor(p.Faint)
+		ui.Text(c, tr.T("Pilih halaman di sidebar")).FontSize(15).TextColor(p.Muted)
+		ui.Text(c, tr.T("Ctrl+K cari · Ctrl+N halaman baru · Ctrl+\\ sidebar · Ctrl+klik buka di samping")).FontSize(12).TextColor(p.Faint)
 	})
 }
 
@@ -706,14 +640,14 @@ func (a *App) panelHeader(c *ui.Context, i int, s *ui.SVG, title, badge string, 
 		}
 		ui.Text(c, badge).FontSize(11).FontWeight(600).TextColor(p.Muted).Padding(2, 8).Background(p.Sidebar).Radius(6)
 		if a.panels[1] == nil {
-			if iconButton(c, p, iconSplit, "Belah panel") {
+			if iconButton(c, p, iconSplit, tr.T("Belah panel")) {
 				if pn := a.panels[i]; pn != nil {
 					if n := a.nodes[pn.id]; n != nil {
 						a.openBeside(n)
 					}
 				}
 			}
-		} else if iconButton(c, p, iconSidebar, "Tutup panel ini") {
+		} else if iconButton(c, p, iconSidebar, tr.T("Tutup panel ini")) {
 			if i == 1 {
 				a.closeSecond()
 			} else {
@@ -735,7 +669,7 @@ func (a *App) panelHeader(c *ui.Context, i int, s *ui.SVG, title, badge string, 
 func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	p := a.pal()
 	n := a.nodes[pn.id]
-	title := "Halaman"
+	title := tr.T("Halaman")
 	if n != nil {
 		title = n.Title
 	}
@@ -746,7 +680,7 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 			label := st.String()
 			switch st {
 			case syncer.Synced:
-				color, label = p.OK, "✓ Tersimpan"
+				color, label = p.OK, tr.T("✓ Tersimpan")
 			case syncer.Failed, syncer.Offline:
 				color = p.Warn
 				if err != nil {
@@ -755,29 +689,29 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 			}
 			ui.Text(c, label).FontSize(12).FontWeight(500).TextColor(color).SingleLine().MaxWidth(280)
 		}
-		if b := iconButton(c, p, iconComment, "Komentar"); b {
+		if b := iconButton(c, p, iconComment, tr.T("Komentar")); b {
 			a.toggleComments(pn)
 		}
 		a.pageActions(c, i, pn)
-		if iconButton(c, p, iconWide, "Lebar penuh") {
+		if iconButton(c, p, iconWide, tr.T("Lebar penuh")) {
 			a.set.FullWidth = !a.set.FullWidth
 			a.saveSettings()
 		}
-		if iconButton(c, p, iconExt, "Buka di Notion") {
+		if iconButton(c, p, iconExt, tr.T("Buka di Notion")) {
 			go mygo.Shell.OpenExternal("https://www.notion.so/" + strings.ReplaceAll(pn.id, "-", ""))
 		}
 	})
 	if pn.opening {
 		ui.Column(c).Fill().Center().Gap(10).Children(func() {
 			ui.Spinner(c).Size(22, 22)
-			ui.Text(c, "Memuat halaman…").FontSize(13).TextColor(p.Faint)
+			ui.Text(c, tr.T("Memuat halaman…")).FontSize(13).TextColor(p.Faint)
 		})
 		return
 	}
 	if pn.openErr != "" {
 		ui.Column(c).Fill().Center().Gap(10).Children(func() {
-			ui.Text(c, "Gagal membuka: "+pn.openErr).FontSize(14).TextColor(c.Theme().Danger)
-			if a.btn(c, "Coba lagi", iconRefresh, false, false) {
+			ui.Text(c, tr.T("Gagal membuka: ")+pn.openErr).FontSize(14).TextColor(c.Theme().Danger)
+			if a.btn(c, tr.T("Coba lagi"), iconRefresh, false, false) {
 				if n != nil {
 					a.show(n, i)
 				}
@@ -827,8 +761,8 @@ func (a *App) pageBody(c *ui.Context, i int, pn *panel, n *node, width, pad floa
 			if n != nil && n.Emoji != "" {
 				emoji.View(c, n.Emoji, 34)
 			}
-			in := ui.TextInput(c.Key("title"+pn.id), &pn.title).Placeholder("Tanpa judul").FontSize(30).FontWeight(700).
-				Grow(1).Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).Label("Judul halaman")
+			in := ui.TextInput(c.Key("title"+pn.id), &pn.title).Placeholder(tr.T("Tanpa judul")).FontSize(30).FontWeight(700).
+				Grow(1).Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).Label(tr.T("Judul halaman"))
 			if in.Changed() {
 				pn.titleDirty, pn.titleEdit = true, time.Now()
 				c.After(1600 * time.Millisecond)
@@ -853,7 +787,7 @@ func (a *App) extrasView(c *ui.Context, i int, pn *panel, pad float32) {
 		row := ui.Row(c.Key("x"+x.ID)).AlignItems(ui.Center).Gap(10).Padding(8, 14).Margin(0, pad, 0, pad).Radius(8).
 			Border(1, p.Line).Cursor(ui.CursorPointer)
 		row.Children(func() {
-			ui.Text(c, "Isi bertingkat di dalam “"+x.Title+"” terlalu dalam untuk diedit di sini").FontSize(13).TextColor(p.Muted).Grow(1)
+			ui.Text(c, tr.T("Isi bertingkat di dalam “")+x.Title+tr.T("” terlalu dalam untuk diedit di sini")).FontSize(13).TextColor(p.Muted).Grow(1)
 			ui.Icon(c, iconExt).Size(14, 14).TextColor(p.Faint)
 		})
 		if row.Clicked() {
@@ -895,8 +829,8 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 	box.Children(func() {
 		e := richtext.Editor(c.Key("editor-"+pn.id), pn.doc, richtext.EditorOptions{
 			Theme:       a.prose(pad),
-			Label:       "Isi halaman",
-			Placeholder: "Ketik / untuk perintah…",
+			Label:       tr.T("Isi halaman"),
+			Placeholder: tr.T("Ketik / untuk perintah…"),
 			OnLink:      a.followLink(i),
 			OnKey: func(k ui.Key, m ui.Modifiers) bool {
 				// Ctrl+V with a picture on the clipboard uploads it; with
@@ -909,7 +843,7 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 			Menu: func(m *ui.Menu) {
 				m.EditItems()
 				m.Separator()
-				if m.Item("Tempel gambar").Disabled(len(mygo.Clipboard.ReadImage()) == 0).Chosen() {
+				if m.Item(tr.T("Tempel gambar")).Disabled(len(mygo.Clipboard.ReadImage()) == 0).Chosen() {
 					a.pasteImage(pn)
 				}
 			},
@@ -931,14 +865,14 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 				// takes its block out of the page.
 				removeParagraph(pn.doc, id)
 				a.edited(pn)
-				a.toast("Dihapus dari halaman")
+				a.toast(tr.T("Dihapus dari halaman"))
 			} else if brokeReadOnly(pn.doc, pn.readOnly) {
 				// Sub-pages, images and tables are not edited here: take
 				// the edit back.
 				pn.doc.Undo()
 				if !pn.warned {
 					pn.warned = true
-					a.toast("Baris ini tidak bisa diedit di gotion. Tekan Enter di ujungnya untuk menulis di bawahnya.")
+					a.toast(tr.T("Baris ini tidak bisa diedit di gotion. Tekan Enter di ujungnya untuk menulis di bawahnya."))
 				}
 			} else {
 				if pn.session != nil {
@@ -1033,7 +967,7 @@ func (a *App) prose(pad float32) *richtext.Theme {
 // only under the pointer.
 func (a *App) sidebarHandle(c *ui.Context) {
 	p := a.pal()
-	h := ui.Box(c.Key("sidebar-edge")).Width(10).Shrink(0).FillHeight().Cursor(ui.CursorResizeEW).Label("Lebar sidebar")
+	h := ui.Box(c.Key("sidebar-edge")).Width(10).Shrink(0).FillHeight().Cursor(ui.CursorResizeEW).Label(tr.T("Lebar sidebar"))
 	active := h.Hovered() || h.Pressed()
 	h.Draw(func(pt *ui.Painter, r ui.Rect) {
 		if active {
@@ -1060,7 +994,7 @@ func (a *App) themeButton(c *ui.Context) {
 	if s == nil {
 		s = iconAuto
 	}
-	b := ui.Box(c.Key("theme")).Padding(5).Radius(6).Cursor(ui.CursorPointer).Label("Tema").Tooltip("Tema (Ctrl+Shift+L ganti mode)")
+	b := ui.Box(c.Key("theme")).Padding(5).Radius(6).Cursor(ui.CursorPointer).Label(tr.T("Tema")).Tooltip(tr.T("Tema (Ctrl+Shift+L ganti mode)"))
 	if b.Hovered() || a.themeOpen {
 		b.Background(p.Hover)
 	}
@@ -1071,7 +1005,7 @@ func (a *App) themeButton(c *ui.Context) {
 	ui.Popover(c, b, &a.themeOpen, func() {
 		ui.Column(c).Width(268).Padding(6).Gap(14).Children(func() {
 			a.appearance(c)
-			more := ui.Text(c.Key("more-settings"), "Pengaturan lainnya…").FontSize(12).TextColor(p.Muted).Cursor(ui.CursorPointer)
+			more := ui.Text(c.Key("more-settings"), tr.T("Pengaturan lainnya…")).FontSize(12).TextColor(p.Muted).Cursor(ui.CursorPointer)
 			if more.Clicked() {
 				a.themeOpen = false
 				a.openSettings("tampilan")
@@ -1086,4 +1020,15 @@ func (a *App) thinScrollbar() ui.ScrollbarStyle {
 	p := a.pal()
 	return ui.ScrollbarStyle{TrackWidth: 8, ThumbWidth: 3, Radius: 2, MinLength: 28,
 		Thumb: p.Faint.Alpha(0.28), Hover: p.Faint.Alpha(0.5), Active: p.Faint.Alpha(0.65)}
+}
+
+// hasPages tells that the workspace shows a page or a database, not
+// counting the library and the trash.
+func (a *App) hasPages() bool {
+	for id := range a.nodes {
+		if id != libraryID && id != trashID {
+			return true
+		}
+	}
+	return len(a.databases) > 0
 }

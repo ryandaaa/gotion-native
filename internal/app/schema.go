@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"gotion/internal/tr"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -28,7 +29,7 @@ func (a *App) changeSchema(t *tableView, props map[string]any, done string) {
 		ds, err := client.UpdateSchema(context.Background(), t.dsID, props)
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal mengubah kolom: " + errText(err))
+				a.toast(tr.T("Gagal mengubah kolom: ") + errText(err))
 				return
 			}
 			a.applySchema(t, ds)
@@ -46,21 +47,21 @@ func (a *App) headerCell(c *ui.Context, t *tableView, col notion.Property, e ui.
 		ui.Text(c, col.Name).FontSize(13).FontWeight(500).TextColor(p.Muted).SingleLine().MinWidth(0).MarginStart(6)
 	})
 	e.ContextMenu(func(m *ui.Menu) {
-		if m.Item("Ganti nama kolom").Chosen() {
+		if m.Item(tr.T("Ganti nama kolom")).Chosen() {
 			s.renaming, s.renameOn, s.name = col.Name, true, col.Name
 		}
-		if col.Type != "title" && m.Item("Hapus kolom").Chosen() {
+		if col.Type != "title" && m.Item(tr.T("Hapus kolom")).Chosen() {
 			s.deleting, s.deleteOn = col.Name, true
 		}
 	})
 	if s.renameOn && s.renaming == col.Name {
 		ui.Popover(c, e, &s.renameOn, func() {
 			ui.Column(c).Width(240).Padding(6).Gap(8).Children(func() {
-				in := ui.TextInput(c, &s.name).AutoFocus().Label("Nama kolom").FontSize(13)
+				in := ui.TextInput(c, &s.name).AutoFocus().Label(tr.T("Nama kolom")).FontSize(13)
 				name := strings.TrimSpace(s.name)
-				if (in.Submitted() || ui.PrimaryButton(c, "Simpan").Clicked()) && name != "" && name != col.Name {
+				if (in.Submitted() || ui.PrimaryButton(c, tr.T("Simpan")).Clicked()) && name != "" && name != col.Name {
 					s.renameOn = false
-					a.changeSchema(t, map[string]any{col.Name: map[string]any{"name": name}}, "Kolom diganti nama")
+					a.changeSchema(t, map[string]any{col.Name: map[string]any{"name": name}}, tr.T("Kolom diganti nama"))
 				}
 			})
 		})
@@ -68,13 +69,13 @@ func (a *App) headerCell(c *ui.Context, t *tableView, col notion.Property, e ui.
 	if s.deleteOn && s.deleting == col.Name {
 		ui.Popover(c, e, &s.deleteOn, func() {
 			ui.Column(c).Width(260).Padding(6).Gap(8).Children(func() {
-				ui.Text(c, "Hapus kolom “"+col.Name+"” dari semua baris?").FontSize(13)
+				ui.Text(c, tr.T("Hapus kolom “")+col.Name+tr.T("” dari semua baris?")).FontSize(13)
 				ui.Row(c).Gap(6).Children(func() {
-					if a.btn(c, "Hapus", iconTrash, true, false) {
+					if a.btn(c, tr.T("Hapus"), iconTrash, true, false) {
 						s.deleteOn = false
-						a.changeSchema(t, map[string]any{col.Name: nil}, "Kolom dihapus")
+						a.changeSchema(t, map[string]any{col.Name: nil}, tr.T("Kolom dihapus"))
 					}
-					if a.btn(c, "Batal", nil, false, false) {
+					if a.btn(c, tr.T("Batal"), nil, false, false) {
 						s.deleteOn = false
 					}
 				})
@@ -87,7 +88,7 @@ func (a *App) headerCell(c *ui.Context, t *tableView, col notion.Property, e ui.
 func (a *App) addColumn(c *ui.Context, t *tableView) {
 	p := a.pal()
 	s := &t.schema
-	b := ui.Row(c.Key("add-col")).Width(44).Shrink(0).Height(38).Center().Cursor(ui.CursorPointer).Label("Kolom baru").Tooltip("Kolom baru")
+	b := ui.Row(c.Key("add-col")).Width(44).Shrink(0).Height(38).Center().Cursor(ui.CursorPointer).Label(tr.T("Kolom baru")).Tooltip(tr.T("Kolom baru"))
 	if b.Hovered() || s.adding {
 		b.Background(p.Hover)
 	}
@@ -100,31 +101,31 @@ func (a *App) addColumn(c *ui.Context, t *tableView) {
 	}
 	ui.Popover(c, b, &s.adding, func() {
 		ui.Column(c).Width(260).Padding(6).Gap(8).Children(func() {
-			ui.Text(c, "Kolom baru").FontSize(12).FontWeight(600).TextColor(p.Faint)
-			in := ui.TextInput(c, &s.newName).Placeholder("Nama kolom").AutoFocus().Label("Nama").FontSize(13)
+			ui.Text(c, tr.T("Kolom baru")).FontSize(12).FontWeight(600).TextColor(p.Faint)
+			in := ui.TextInput(c, &s.newName).Placeholder(tr.T("Nama kolom")).AutoFocus().Label(tr.T("Nama")).FontSize(13)
 			var labels []string
 			label := ""
 			for _, ct := range notion.ColumnTypes {
-				labels = append(labels, ct.Label)
+				labels = append(labels, tr.T(ct.Label))
 				if ct.Type == s.newType {
-					label = ct.Label
+					label = tr.T(ct.Label)
 				}
 			}
-			if ui.Select(c, &label, labels).Label("Tipe").Changed() {
+			if ui.Select(c, &label, labels).Label(tr.T("Tipe")).Changed() {
 				for _, ct := range notion.ColumnTypes {
-					if ct.Label == label {
+					if tr.T(ct.Label) == label {
 						s.newType = ct.Type
 					}
 				}
 			}
 			name := strings.TrimSpace(s.newName)
 			if _, taken := t.column(name); taken {
-				ui.Text(c, "Sudah ada kolom bernama itu").FontSize(12).TextColor(c.Theme().Danger)
+				ui.Text(c, tr.T("Sudah ada kolom bernama itu")).FontSize(12).TextColor(c.Theme().Danger)
 				return
 			}
-			if (in.Submitted() || ui.PrimaryButton(c, "Tambah kolom").Disabled(name == "").Clicked()) && name != "" {
+			if (in.Submitted() || ui.PrimaryButton(c, tr.T("Tambah kolom")).Disabled(name == "").Clicked()) && name != "" {
 				s.adding = false
-				a.changeSchema(t, map[string]any{name: map[string]any{s.newType: map[string]any{}}}, "Kolom “"+name+"” ditambahkan")
+				a.changeSchema(t, map[string]any{name: map[string]any{s.newType: map[string]any{}}}, tr.T("Kolom “")+name+tr.T("” ditambahkan"))
 			}
 		})
 	})

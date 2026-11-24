@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"gotion/internal/tr"
 	"sort"
 
 	"github.com/egoist/mygo/ui"
@@ -61,7 +62,7 @@ func (a *App) propsView(c *ui.Context, pn *panel, pad float32) {
 					if hasValue(raw) || col.Type == "checkbox" {
 						a.value(c, raw, col.Type)
 					} else {
-						ui.Text(c, "Kosong").FontSize(14).TextColor(p.Faint)
+						ui.Text(c, tr.T("Kosong")).FontSize(14).TextColor(p.Faint)
 					}
 				})
 			})

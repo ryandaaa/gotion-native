@@ -1,6 +1,7 @@
 package app
 
 import (
+	"gotion/internal/tr"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -149,7 +150,7 @@ func (a *App) tabStrip(c *ui.Context, i int) {
 
 func (a *App) tab(c *ui.Context, p palette, i, k int, t *panel) {
 	n := a.nodes[t.id]
-	title, emojiText, kind := "Memuat…", "", "page"
+	title, emojiText, kind := tr.T("Memuat…"), "", "page"
 	if n != nil {
 		title, emojiText, kind = n.Title, n.Emoji, n.Kind
 	}
@@ -188,7 +189,7 @@ func (a *App) tab(c *ui.Context, p palette, i, k int, t *panel) {
 			st, _ := t.session.Status()
 			pending = st == syncer.Pending || st == syncer.Syncing
 		}
-		x := ui.Box(c.Key("x")).Size(18, 18).Radius(4).Center().Label("Tutup tab").Tooltip("Tutup (Ctrl+W)")
+		x := ui.Box(c.Key("x")).Size(18, 18).Radius(4).Center().Label(tr.T("Tutup tab")).Tooltip(tr.T("Tutup (Ctrl+W)"))
 		if x.Hovered() {
 			x.Background(p.Line)
 		}

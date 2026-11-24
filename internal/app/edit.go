@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"gotion/internal/tr"
 	"sort"
 	"strings"
 
@@ -46,7 +47,7 @@ func (a *App) setCell(t *tableView, r *notion.Page, col notion.Property, text st
 		if err != nil {
 			a.update(func() {
 				r.Properties[col.Name] = old
-				a.toast("Gagal menyimpan " + col.Name + ": " + errText(err))
+				a.toast(tr.T("Gagal menyimpan ") + col.Name + ": " + errText(err))
 			})
 		}
 	}()
@@ -112,7 +113,7 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 				chosen[n] = true
 			}
 			if len(col.Options) == 0 {
-				ui.Text(c, "Belum ada pilihan. Tambahkan di bawah.").FontSize(13).TextColor(p.Faint).Padding(4)
+				ui.Text(c, tr.T("Belum ada pilihan. Tambahkan di bawah.")).FontSize(13).TextColor(p.Faint).Padding(4)
 			}
 			ui.Scroll(c).MaxHeight(300).Children(func() {
 				ui.Column(c).Gap(1).Children(func() {
@@ -151,14 +152,14 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 			})
 			// A new option: added to the column, then chosen.
 			if col.Type != "status" {
-				in := ui.TextInput(c, &e.text).Placeholder("Pilihan baru…").Label("Pilihan baru").FontSize(13)
+				in := ui.TextInput(c, &e.text).Placeholder(tr.T("Pilihan baru…")).Label(tr.T("Pilihan baru")).FontSize(13)
 				if in.Submitted() && strings.TrimSpace(e.text) != "" {
 					a.addOption(t, r, col, strings.TrimSpace(e.text))
 					e.text = ""
 				}
 			}
 			if len(chosen) > 0 {
-				clear := ui.Text(c.Key("clear"), "Kosongkan").FontSize(13).TextColor(p.Muted).Padding(6).Radius(6).Cursor(ui.CursorPointer)
+				clear := ui.Text(c.Key("clear"), tr.T("Kosongkan")).FontSize(13).TextColor(p.Muted).Padding(6).Radius(6).Cursor(ui.CursorPointer)
 				if clear.Hovered() {
 					clear.Background(p.Hover)
 				}
@@ -170,7 +171,7 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 		case "people", "relation":
 			a.linksEditor(c, t, r, col)
 		default:
-			hint := map[string]string{"date": "TTTT-BB-HH", "number": "Angka", "url": "https://", "email": "nama@contoh.com", "phone_number": "+62…"}[col.Type]
+			hint := map[string]string{"date": tr.T("TTTT-BB-HH"), "number": tr.T("Angka"), "url": "https://", "email": tr.T("nama@contoh.com"), "phone_number": "+62…"}[col.Type]
 			in := ui.TextInput(c, &e.text).Placeholder(hint).AutoFocus().Label(col.Name)
 			if col.Type == "rich_text" {
 				in.Multiline(true).Lines(1, 6)
@@ -182,9 +183,9 @@ func (a *App) propertyEditor(c *ui.Context, t *tableView, r *notion.Page, col no
 				if e.err != "" {
 					ui.Text(c, e.err).FontSize(12).TextColor(c.Theme().Danger).Grow(1)
 				} else {
-					ui.Text(c, "Enter untuk simpan").FontSize(11).TextColor(p.Faint).Grow(1)
+					ui.Text(c, tr.T("Enter untuk simpan")).FontSize(11).TextColor(p.Faint).Grow(1)
 				}
-				if (in.Submitted() || ui.PrimaryButton(c, "Simpan").Clicked()) && a.setCell(t, r, col, e.text, false, nil) {
+				if (in.Submitted() || ui.PrimaryButton(c, tr.T("Simpan")).Clicked()) && a.setCell(t, r, col, e.text, false, nil) {
 					e.open = false
 				}
 			})
@@ -204,7 +205,7 @@ func (a *App) addRow(c *ui.Context, i int, t *tableView) {
 		}
 		b.Children(func() {
 			ui.Icon(c, iconPlus).Size(14, 14).TextColor(p.Faint)
-			ui.Text(c, "Baris baru").FontSize(14).TextColor(p.Muted)
+			ui.Text(c, tr.T("Baris baru")).FontSize(14).TextColor(p.Muted)
 		})
 		if b.Clicked() {
 			*n = newRow{open: true}
@@ -213,26 +214,26 @@ func (a *App) addRow(c *ui.Context, i int, t *tableView) {
 		return
 	}
 	ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 8).Children(func() {
-		in := ui.TextInput(c, &n.title).Placeholder("Judul baris baru").AutoFocus().Grow(1).Label("Judul").Disabled(n.busy)
+		in := ui.TextInput(c, &n.title).Placeholder(tr.T("Judul baris baru")).AutoFocus().Grow(1).Label(tr.T("Judul")).Disabled(n.busy)
 		if in.Submitted() && !n.busy {
 			a.createRow(i, t)
 		}
 		if len(t.templates) > 0 && !n.busy {
-			names := []string{"Tanpa template"}
+			names := []string{tr.T("Tanpa template")}
 			for _, tp := range t.templates {
 				names = append(names, nonEmpty(tp.Name, "Template"))
 			}
-			choice := nonEmpty(n.template, "Tanpa template")
+			choice := nonEmpty(n.template, tr.T("Tanpa template"))
 			if ui.Select(c, &choice, names).Width(180).Label("Template").Changed() {
 				n.template = choice
-				if choice == "Tanpa template" {
+				if choice == tr.T("Tanpa template") {
 					n.template = ""
 				}
 			}
 		}
 		if n.busy {
 			ui.Spinner(c).Size(14, 14)
-		} else if a.btn(c, "Batal", nil, false, false) {
+		} else if a.btn(c, tr.T("Batal"), nil, false, false) {
 			*n = newRow{}
 		}
 	})
@@ -259,11 +260,11 @@ func (a *App) createRow(i int, t *tableView) {
 		a.update(func() {
 			t.adding = newRow{}
 			if err != nil {
-				a.toast("Gagal menambah baris: " + errText(err))
+				a.toast(tr.T("Gagal menambah baris: ") + errText(err))
 				return
 			}
 			t.rows = append(t.rows, r)
-			a.toast("Baris ditambahkan")
+			a.toast(tr.T("Baris ditambahkan"))
 		})
 	}()
 }
@@ -276,7 +277,7 @@ func (a *App) addOption(t *tableView, r *notion.Page, col notion.Property, name 
 		ds, err := client.UpdateSchema(context.Background(), t.dsID, notion.AddOption(col, name))
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal menambah pilihan: " + errText(err))
+				a.toast(tr.T("Gagal menambah pilihan: ") + errText(err))
 				return
 			}
 			a.applySchema(t, ds)
@@ -335,7 +336,7 @@ func (a *App) setLinks(t *tableView, r *notion.Page, col notion.Property, links 
 		if err != nil {
 			a.update(func() {
 				r.Properties[col.Name] = old
-				a.toast("Gagal menyimpan " + col.Name + ": " + errText(err))
+				a.toast(tr.T("Gagal menyimpan ") + col.Name + ": " + errText(err))
 			})
 		}
 	}()
@@ -357,7 +358,7 @@ func (a *App) linksEditor(c *ui.Context, t *tableView, r *notion.Page, col notio
 			a.loadMembers()
 		}
 		for _, u := range a.settings.members {
-			choices = append(choices, notion.Linked{ID: u.ID, Name: nonEmpty(u.Name, "Tanpa nama")})
+			choices = append(choices, notion.Linked{ID: u.ID, Name: nonEmpty(u.Name, tr.T("Tanpa nama"))})
 		}
 		if a.settings.membersErr != "" {
 			ui.Text(c, a.settings.membersErr).FontSize(12).TextColor(p.Faint).Padding(4)
@@ -365,7 +366,7 @@ func (a *App) linksEditor(c *ui.Context, t *tableView, r *notion.Page, col notio
 	} else {
 		choices = a.relationChoices(t, col)
 	}
-	ui.TextInput(c, &e.text).Placeholder("Cari…").AutoFocus().Label("Cari").FontSize(13)
+	ui.TextInput(c, &e.text).Placeholder(tr.T("Cari…")).AutoFocus().Label(tr.T("Cari")).FontSize(13)
 	q := strings.ToLower(strings.TrimSpace(e.text))
 	ui.Scroll(c).MaxHeight(280).Children(func() {
 		ui.Column(c).Gap(1).Children(func() {
@@ -399,7 +400,7 @@ func (a *App) linksEditor(c *ui.Context, t *tableView, r *notion.Page, col notio
 				}
 			}
 			if len(choices) == 0 {
-				ui.Text(c, "Memuat…").FontSize(12).TextColor(p.Faint).Padding(6)
+				ui.Text(c, tr.T("Memuat…")).FontSize(12).TextColor(p.Faint).Padding(6)
 			}
 		})
 	})
@@ -423,12 +424,12 @@ func (a *App) relationChoices(t *tableView, col notion.Property) []notion.Linked
 		pages, err := client.QueryWith(context.Background(), col.Target, nil, nil, 200)
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal memuat halaman relasi: " + errText(err))
+				a.toast(tr.T("Gagal memuat halaman relasi: ") + errText(err))
 				return
 			}
 			var out []notion.Linked
 			for _, pg := range pages {
-				out = append(out, notion.Linked{ID: pg.ID, Name: nonEmpty(pg.Title(), "Tanpa judul")})
+				out = append(out, notion.Linked{ID: pg.ID, Name: nonEmpty(pg.Title(), tr.T("Tanpa judul"))})
 			}
 			t.related[col.Target] = out
 		})

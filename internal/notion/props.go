@@ -3,6 +3,7 @@ package notion
 import (
 	"encoding/json"
 	"fmt"
+	"gotion/internal/tr"
 	"strconv"
 	"strings"
 )
@@ -119,7 +120,7 @@ func FormatProperty(raw json.RawMessage) string {
 		if len(names) == len(v.Relation) {
 			return strings.Join(names, ", ")
 		}
-		return fmt.Sprintf("%d halaman", len(v.Relation))
+		return fmt.Sprintf(tr.T("%d halaman"), len(v.Relation))
 	case "files":
 		var names []string
 		for _, f := range v.Files {

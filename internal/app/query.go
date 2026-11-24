@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"gotion/internal/tr"
 	"strconv"
 	"time"
 
@@ -73,7 +74,7 @@ func (a *App) requery(t *tableView) {
 		a.update(func() {
 			t.loading = false
 			if err != nil {
-				a.toast("Gagal memfilter: " + errText(err))
+				a.toast(tr.T("Gagal memfilter: ") + errText(err))
 				return
 			}
 			t.rows = rows
@@ -121,7 +122,7 @@ func (a *App) queryButtons(c *ui.Context, t *tableView) {
 		q.filterOpen = !q.filterOpen
 	}
 	ui.Popover(c, fb, &q.filterOpen, func() { a.filterEditor(c, t) })
-	slabel := "Urutkan"
+	slabel := tr.T("Urutkan")
 	if q.sortProp != "" {
 		slabel = q.sortProp
 	}
@@ -146,10 +147,10 @@ func (a *App) filterEditor(c *ui.Context, t *tableView) {
 				}()]).FontSize(12).TextColor(p.Faint)
 				shown := cond.value
 				if col, _ := t.column(cond.prop); col.Type == "checkbox" {
-					shown = map[string]string{"true": "Dicentang", "false": "Belum"}[cond.value]
+					shown = map[string]string{"true": tr.T("Dicentang"), "false": tr.T("Belum dicentang")}[cond.value]
 				}
 				ui.Text(c, shown).FontSize(13).Grow(1).SingleLine().MinWidth(0)
-				if smallButton(c, p, iconClose, "Hapus filter") {
+				if smallButton(c, p, iconClose, tr.T("Hapus filter")) {
 					q.conds = append(q.conds[:k], q.conds[k+1:]...)
 					a.requery(t)
 				}
@@ -167,7 +168,7 @@ func (a *App) filterEditor(c *ui.Context, t *tableView) {
 		if q.newProp == "" {
 			q.newProp = names[0]
 		}
-		if ui.Select(c, &q.newProp, names).Label("Properti").Changed() {
+		if ui.Select(c, &q.newProp, names).Label(tr.T("Properti")).Changed() {
 			q.newValue = ""
 		}
 		col, _ := t.column(q.newProp)
@@ -186,15 +187,15 @@ func (a *App) filterEditor(c *ui.Context, t *tableView) {
 				}
 			})
 		case "checkbox":
-			a.segmented(c, "fcheck", &q.newValue, []struct{ id, label string }{{"true", "Dicentang"}, {"false", "Belum"}})
+			a.segmented(c, "fcheck", &q.newValue, []struct{ id, label string }{{"true", tr.T("Dicentang")}, {"false", tr.T("Belum dicentang")}})
 		default:
-			ui.TextInput(c, &q.newValue).Placeholder("Berisi…").Label("Nilai").FontSize(13)
+			ui.TextInput(c, &q.newValue).Placeholder(tr.T("Berisi…")).Label(tr.T("Nilai")).FontSize(13)
 		}
 		value := q.newValue
 		if col.Type == "checkbox" && value == "" {
 			value = "true"
 		}
-		if ui.PrimaryButton(c, "Tambah filter").Disabled(value == "").Clicked() {
+		if ui.PrimaryButton(c, tr.T("Tambah filter")).Disabled(value == "").Clicked() {
 			q.conds = append(q.conds, condition{prop: q.newProp, value: value})
 			q.newValue = ""
 			a.requery(t)
@@ -206,7 +207,7 @@ func (a *App) sortEditor(c *ui.Context, t *tableView) {
 	p := a.pal()
 	q := &t.query
 	ui.Column(c).Width(260).Padding(6).Gap(10).Children(func() {
-		ui.Text(c, "Urutkan").FontSize(12).FontWeight(600).TextColor(p.Faint)
+		ui.Text(c, tr.T("Urutkan")).FontSize(12).FontWeight(600).TextColor(p.Faint)
 		var names []string
 		for _, col := range t.columns {
 			names = append(names, col.Name)
@@ -215,18 +216,18 @@ func (a *App) sortEditor(c *ui.Context, t *tableView) {
 		if prop == "" && len(names) > 0 {
 			prop = names[0]
 		}
-		changed := ui.Select(c, &prop, names).Label("Properti").Changed()
+		changed := ui.Select(c, &prop, names).Label(tr.T("Properti")).Changed()
 		dir := "asc"
 		if q.sortDesc {
 			dir = "desc"
 		}
 		old := dir
-		a.segmented(c, "sdir", &dir, []struct{ id, label string }{{"asc", "Naik"}, {"desc", "Turun"}})
-		if changed || dir != old || q.sortProp == "" && ui.PrimaryButton(c, "Urutkan").Clicked() {
+		a.segmented(c, "sdir", &dir, []struct{ id, label string }{{"asc", tr.T("Naik")}, {"desc", tr.T("Turun")}})
+		if changed || dir != old || q.sortProp == "" && ui.PrimaryButton(c, tr.T("Urutkan")).Clicked() {
 			q.sortProp, q.sortDesc = prop, dir == "desc"
 			a.requery(t)
 		}
-		if q.sortProp != "" && a.btn(c, "Hapus urutan", nil, false, false) {
+		if q.sortProp != "" && a.btn(c, tr.T("Hapus urutan"), nil, false, false) {
 			q.sortProp = ""
 			a.requery(t)
 		}
@@ -240,7 +241,7 @@ func (a *App) trashRow(t *tableView, r *notion.Page) {
 		err := client.TrashPage(context.Background(), r.ID, true)
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal membuang baris: " + errText(err))
+				a.toast(tr.T("Gagal membuang baris: ") + errText(err))
 				return
 			}
 			for k, x := range t.rows {
@@ -251,7 +252,7 @@ func (a *App) trashRow(t *tableView, r *notion.Page) {
 			}
 			a.set.Trashed = append(a.set.Trashed, trashed{ID: r.ID, Title: r.Title(), Emoji: r.Emoji(), When: nowFunc()})
 			a.saveSettings()
-			a.toast("Baris dibuang ke sampah")
+			a.toast(tr.T("Baris dibuang ke sampah"))
 		})
 	}()
 }

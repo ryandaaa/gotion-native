@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gotion/internal/tr"
 	"io"
 	"log"
 	"net/http"
@@ -34,7 +35,7 @@ const (
 )
 
 func (s Status) String() string {
-	return [...]string{"Tersimpan", "Belum sync", "Sinkron…", "Gagal", "Offline"}[s]
+	return [...]string{tr.T("Tersimpan"), tr.T("Belum sync"), tr.T("Sinkron…"), tr.T("Gagal"), "Offline"}[s]
 }
 
 const (
@@ -364,9 +365,9 @@ func (s *Session) push(ctx context.Context) {
 	}
 	if err != nil && s.OnError != nil {
 		if next == Offline {
-			s.OnError("Offline: edit disimpan di komputer dan dikirim saat koneksi kembali")
+			s.OnError(tr.T("Offline: edit disimpan di komputer dan dikirim saat koneksi kembali"))
 		} else {
-			s.OnError("Gagal menyimpan ke Notion: " + err.Error())
+			s.OnError(tr.T("Gagal menyimpan ke Notion: ") + err.Error())
 		}
 	}
 	s.notify()

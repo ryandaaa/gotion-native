@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"gotion/internal/tr"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -54,7 +55,7 @@ func (a *App) loadComments(pn *panel) {
 func commentError(err error) string {
 	var e *notion.Error
 	if errors.As(err, &e) && e.Status == 403 {
-		return "Integrasi ini belum boleh membaca atau menulis komentar. Aktifkan “Read comments” dan “Insert comments” di pengaturan integrasi Notion."
+		return tr.T("Integrasi ini belum boleh membaca atau menulis komentar. Aktifkan “Read comments” dan “Insert comments” di pengaturan integrasi Notion.")
 	}
 	return errText(err)
 }
@@ -73,7 +74,7 @@ func (a *App) sendComment(pn *panel, discussion, text string) {
 		a.update(func() {
 			cs.sending = false
 			if err != nil {
-				a.toast("Gagal mengirim komentar: " + commentError(err))
+				a.toast(tr.T("Gagal mengirim komentar: ") + commentError(err))
 				return
 			}
 			if c.DiscussionID == "" {
@@ -122,11 +123,11 @@ func (a *App) commentsDrawer(c *ui.Context, pn *panel) {
 	cs := &pn.comments
 	ui.Column(c.Key("comments")).Width(320).Shrink(0).BorderWidth(0, 0, 0, 1).BorderColor(p.Line).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Padding(14, 12, 10, 18).Children(func() {
-			ui.Text(c, "Komentar").FontSize(15).FontWeight(600).Grow(1)
-			if iconButton(c, p, iconRefresh, "Muat ulang komentar") {
+			ui.Text(c, tr.T("Komentar")).FontSize(15).FontWeight(600).Grow(1)
+			if iconButton(c, p, iconRefresh, tr.T("Muat ulang komentar")) {
 				a.loadComments(pn)
 			}
-			if iconButton(c, p, iconClose, "Tutup") {
+			if iconButton(c, p, iconClose, tr.T("Tutup")) {
 				cs.open = false
 			}
 		})
@@ -138,7 +139,7 @@ func (a *App) commentsDrawer(c *ui.Context, pn *panel) {
 				case cs.err != "":
 					ui.Text(c, cs.err).FontSize(13).TextColor(p.Muted)
 				case len(cs.list) == 0:
-					ui.Text(c, "Belum ada komentar di halaman ini.").FontSize(13).TextColor(p.Faint)
+					ui.Text(c, tr.T("Belum ada komentar di halaman ini.")).FontSize(13).TextColor(p.Faint)
 				}
 				for _, d := range discussions(cs.list) {
 					a.discussion(c, pn, d)
@@ -147,10 +148,10 @@ func (a *App) commentsDrawer(c *ui.Context, pn *panel) {
 		})
 		if cs.err == "" {
 			ui.Column(c).Padding(10, 14, 14, 14).Gap(8).BorderWidth(1, 0, 0, 0).BorderColor(p.Line).Children(func() {
-				in := ui.TextArea(c, &cs.draft).Lines(1, 5).Placeholder("Tambah komentar…").Label("Komentar baru").FontSize(14)
+				in := ui.TextArea(c, &cs.draft).Lines(1, 5).Placeholder(tr.T("Tambah komentar…")).Label(tr.T("Komentar baru")).FontSize(14)
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "Ctrl+Enter untuk kirim").FontSize(11).TextColor(p.Faint).Grow(1)
-					send := ui.PrimaryButton(c, "Kirim").Disabled(cs.sending || strings.TrimSpace(cs.draft) == "")
+					ui.Text(c, tr.T("Ctrl+Enter untuk kirim")).FontSize(11).TextColor(p.Faint).Grow(1)
+					send := ui.PrimaryButton(c, tr.T("Kirim")).Disabled(cs.sending || strings.TrimSpace(cs.draft) == "")
 					if send.Clicked() || in.Shortcut(ui.Cmd, ui.KeyEnter) {
 						a.sendComment(pn, "", cs.draft)
 					}
@@ -169,7 +170,7 @@ func (a *App) discussion(c *ui.Context, pn *panel, d []notion.Comment) {
 		for _, cm := range d {
 			ui.Column(c.Key("c" + cm.ID)).Gap(3).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					name := nonEmpty(cm.DisplayName.ResolvedName, nonEmpty(cm.CreatedBy.Name, "Seseorang"))
+					name := nonEmpty(cm.DisplayName.ResolvedName, nonEmpty(cm.CreatedBy.Name, tr.T("Seseorang")))
 					ui.Text(c, name).FontSize(13).FontWeight(600)
 					ui.Text(c, ago(cm.CreatedTime)).FontSize(11).TextColor(p.Faint)
 				})
@@ -180,17 +181,17 @@ func (a *App) discussion(c *ui.Context, pn *panel, d []notion.Comment) {
 			return
 		}
 		if cs.replyTo != id {
-			if ui.Link(c, "Balas", "").FontSize(12).TextColor(p.Muted).Clicked() {
+			if ui.Link(c, tr.T("Balas"), "").FontSize(12).TextColor(p.Muted).Clicked() {
 				cs.replyTo, cs.reply = id, ""
 			}
 			return
 		}
-		in := ui.TextArea(c, &cs.reply).Lines(1, 4).Placeholder("Balas…").AutoFocus().Label("Balasan").FontSize(13)
+		in := ui.TextArea(c, &cs.reply).Lines(1, 4).Placeholder(tr.T("Balas…")).AutoFocus().Label(tr.T("Balasan")).FontSize(13)
 		ui.Row(c).Gap(6).Children(func() {
-			if ui.PrimaryButton(c, "Kirim").Disabled(cs.sending || strings.TrimSpace(cs.reply) == "").Clicked() || in.Shortcut(ui.Cmd, ui.KeyEnter) {
+			if ui.PrimaryButton(c, tr.T("Kirim")).Disabled(cs.sending || strings.TrimSpace(cs.reply) == "").Clicked() || in.Shortcut(ui.Cmd, ui.KeyEnter) {
 				a.sendComment(pn, id, cs.reply)
 			}
-			if a.btn(c, "Batal", nil, false, false) {
+			if a.btn(c, tr.T("Batal"), nil, false, false) {
 				cs.replyTo = ""
 			}
 		})

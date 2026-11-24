@@ -21,8 +21,13 @@ func main() {
 		syncer.CacheDir = filepath.Join(dir, "gotion", "cache")
 		emoji.Dir = filepath.Join(dir, "gotion", "emoji")
 	}
+	app.PreferredLanguages = func() (langs []string) {
+		defer func() { recover() }() // before the app is ready: none yet
+		return mygo.App.PreferredLanguages()
+	}
 	a := app.New()
 	mygo.App.WhenReady(func() {
+		a.ApplyLanguage() // the system's languages are known now
 		if runtime.GOOS == "darwin" {
 			// The Mac's menu bar; elsewhere the window draws its own bar.
 			mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{

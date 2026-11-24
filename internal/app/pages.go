@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"gotion/internal/tr"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,11 +25,13 @@ const (
 // special is the node of one of the app's own pages.
 func (a *App) special(id string) *node {
 	if n := a.nodes[id]; n != nil {
+		// Its name follows the language.
+		n.Title = map[string]string{libraryID: tr.T("Pustaka"), trashID: tr.T("Sampah")}[id]
 		return n
 	}
 	n := map[string]*node{
-		libraryID: {ID: libraryID, Title: "Pustaka", Kind: "library"},
-		trashID:   {ID: trashID, Title: "Sampah", Kind: "trash"},
+		libraryID: {ID: libraryID, Title: tr.T("Pustaka"), Kind: "library"},
+		trashID:   {ID: trashID, Title: tr.T("Sampah"), Kind: "trash"},
 	}[id]
 	if n != nil {
 		a.nodes[id] = n
@@ -57,7 +60,7 @@ type libraryState struct {
 func (a *App) libraryPanel(c *ui.Context, i int) {
 	p := a.pal()
 	l := &a.library
-	a.panelHeader(c, i, iconLibrary, "Pustaka", "pustaka", nil)
+	a.panelHeader(c, i, iconLibrary, tr.T("Pustaka"), "pustaka", nil)
 	var items []*node
 	q := strings.ToLower(strings.TrimSpace(l.query))
 	for _, n := range a.nodes {
@@ -81,27 +84,27 @@ func (a *App) libraryPanel(c *ui.Context, i int) {
 	})
 	ui.Column(c).Grow(1).MinHeight(0).Padding(24, 32, 0, 32).Gap(14).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
-			ui.Text(c, "Pustaka").FontSize(26).FontWeight(700)
-			ui.Text(c, itoa(len(items))+" item").FontSize(13).TextColor(p.Faint)
+			ui.Text(c, tr.T("Pustaka")).FontSize(26).FontWeight(700)
+			ui.Text(c, itoa(len(items))+tr.T(" item")).FontSize(13).TextColor(p.Faint)
 			ui.Box(c).Grow(1)
-			if a.btn(c, "Impor Markdown", iconImport, false, false) {
+			if a.btn(c, tr.T("Impor Markdown"), iconImport, false, false) {
 				a.importMarkdownDialog(i)
 			}
 		})
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Wrap().Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 12).Radius(8).Background(p.Sidebar).Width(320).Children(func() {
 				ui.Icon(c, iconSearch).Size(14, 14).TextColor(p.Faint)
-				ui.TextInput(c, &l.query).Placeholder("Cari di pustaka").Grow(1).Label("Cari").
+				ui.TextInput(c, &l.query).Placeholder(tr.T("Cari di pustaka")).Grow(1).Label(tr.T("Cari")).
 					Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).FontSize(14)
 			})
-			a.segmented(c, "lib-kind", &l.kind, []struct{ id, label string }{{"", "Semua"}, {"page", "Halaman"}, {"db", "Database"}})
-			a.segmented(c, "lib-order", &l.order, []struct{ id, label string }{{"edited", "Terakhir diubah"}, {"title", "Judul"}})
+			a.segmented(c, "lib-kind", &l.kind, []struct{ id, label string }{{"", tr.T("Semua")}, {"page", tr.T("Halaman")}, {"db", "Database"}})
+			a.segmented(c, "lib-order", &l.order, []struct{ id, label string }{{"edited", tr.T("Terakhir diubah")}, {"title", tr.T("Judul")}})
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).ScrollbarStyle(a.thinScrollbar()).Children(func() {
 			// Room on the right: the scroll bar runs beside the rows, not on them.
 			ui.Column(c).Gap(1).Padding(0, 14, 24, 0).Children(func() {
 				if len(items) == 0 {
-					ui.Text(c, "Tidak ada yang cocok.").FontSize(14).TextColor(p.Faint).Padding(12)
+					ui.Text(c, tr.T("Tidak ada yang cocok.")).FontSize(14).TextColor(p.Faint).Padding(12)
 				}
 				for _, n := range items {
 					row := ui.Row(c.Key("lib"+n.ID)).AlignItems(ui.Center).Gap(10).Padding(9, 10).Radius(8).Cursor(ui.CursorPointer)
@@ -159,15 +162,15 @@ func itoa(n int) string { return strconv.Itoa(n) }
 // trashPanel lists the pages put in the trash from gotion, to restore.
 func (a *App) trashPanel(c *ui.Context, i int) {
 	p := a.pal()
-	a.panelHeader(c, i, iconTrash, "Sampah", "sampah", nil)
+	a.panelHeader(c, i, iconTrash, tr.T("Sampah"), "sampah", nil)
 	ui.Column(c).Grow(1).MinHeight(0).Padding(24, 32, 0, 32).Gap(10).Children(func() {
-		ui.Text(c, "Sampah").FontSize(26).FontWeight(700)
-		ui.Text(c, "Halaman yang kamu buang dari gotion. Notion menyimpannya 30 hari; sampah dari Notion web tidak terlihat di sini, karena API Notion tidak menampilkannya.").
+		ui.Text(c, tr.T("Sampah")).FontSize(26).FontWeight(700)
+		ui.Text(c, tr.T("Halaman yang kamu buang dari gotion. Notion menyimpannya 30 hari; sampah dari Notion web tidak terlihat di sini, karena API Notion tidak menampilkannya.")).
 			FontSize(13).TextColor(p.Muted).MaxWidth(640)
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(2).Padding(8, 0, 24, 0).Children(func() {
 				if len(a.set.Trashed) == 0 {
-					ui.Text(c, "Sampah kosong.").FontSize(14).TextColor(p.Faint).Padding(12, 0)
+					ui.Text(c, tr.T("Sampah kosong.")).FontSize(14).TextColor(p.Faint).Padding(12, 0)
 				}
 				for k := len(a.set.Trashed) - 1; k >= 0; k-- {
 					t := a.set.Trashed[k]
@@ -177,9 +180,9 @@ func (a *App) trashPanel(c *ui.Context, i int) {
 						} else {
 							ui.Icon(c, iconPage).Size(16, 16).TextColor(p.Faint)
 						}
-						ui.Text(c, nonEmpty(t.Title, "Tanpa judul")).FontSize(14).Grow(1).SingleLine().MinWidth(0)
-						ui.Text(c, "Dibuang "+ago(t.When)).FontSize(12).TextColor(p.Faint)
-						if a.btn(c, "Pulihkan", iconRestore, false, false) {
+						ui.Text(c, nonEmpty(t.Title, tr.T("Tanpa judul"))).FontSize(14).Grow(1).SingleLine().MinWidth(0)
+						ui.Text(c, tr.T("Dibuang ")+ago(t.When)).FontSize(12).TextColor(p.Faint)
+						if a.btn(c, tr.T("Pulihkan"), iconRestore, false, false) {
 							a.restorePage(t)
 						}
 					})
@@ -200,7 +203,7 @@ func (a *App) trashPage(id string) {
 		err := client.TrashPage(context.Background(), id, true)
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal membuang: " + errText(err))
+				a.toast(tr.T("Gagal membuang: ") + errText(err))
 				return
 			}
 			for i := range 2 {
@@ -214,7 +217,7 @@ func (a *App) trashPage(id string) {
 			delete(a.nodes, id)
 			a.regroup()
 			a.saveSettings()
-			a.toast("“" + n.Title + "” dibuang ke sampah")
+			a.toast("“" + n.Title + tr.T("” dibuang ke sampah"))
 		})
 	}()
 }
@@ -225,7 +228,7 @@ func (a *App) restorePage(t trashed) {
 		err := client.TrashPage(context.Background(), t.ID, false)
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal memulihkan: " + errText(err))
+				a.toast(tr.T("Gagal memulihkan: ") + errText(err))
 				return
 			}
 			for k, x := range a.set.Trashed {
@@ -237,7 +240,7 @@ func (a *App) restorePage(t trashed) {
 			a.nodes[t.ID] = &node{ID: t.ID, Title: t.Title, Emoji: t.Emoji, Kind: "page", ParentID: t.ParentID, Edited: time.Now()}
 			a.regroup()
 			a.saveSettings()
-			a.toast("“" + t.Title + "” dipulihkan")
+			a.toast("“" + t.Title + tr.T("” dipulihkan"))
 		})
 	}()
 }
@@ -257,7 +260,7 @@ var commonEmoji = strings.Fields("📄 📝 📚 📌 ✅ 🚀 💡 🎯 📊 �
 func (a *App) pageActions(c *ui.Context, i int, pn *panel) {
 	p := a.pal()
 	m := &pn.menu
-	b := ui.Box(c.Key("page-menu")).Padding(5).Radius(6).Cursor(ui.CursorPointer).Label("Aksi halaman").Tooltip("Aksi halaman")
+	b := ui.Box(c.Key("page-menu")).Padding(5).Radius(6).Cursor(ui.CursorPointer).Label(tr.T("Aksi halaman")).Tooltip(tr.T("Aksi halaman"))
 	if b.Hovered() || m.open {
 		b.Background(p.Hover)
 	}
@@ -298,43 +301,43 @@ func (a *App) pageMenuItems(c *ui.Context, i int, pn *panel) {
 	p := a.pal()
 	m := &pn.menu
 	url := "https://www.notion.so/" + strings.ReplaceAll(pn.id, "-", "")
-	if a.menuItem(c, "icon", "Ubah ikon…", false) {
+	if a.menuItem(c, "icon", tr.T("Ubah ikon…"), false) {
 		m.icons = true
 	}
-	if pn.cover.url == "" && a.menuItem(c, "cover", "Tambah cover", false) {
+	if pn.cover.url == "" && a.menuItem(c, "cover", tr.T("Tambah cover"), false) {
 		m.open = false
 		pn.cover.editing, pn.cover.input = true, ""
 	}
-	if a.menuItem(c, "move", "Pindahkan ke…", false) {
+	if a.menuItem(c, "move", tr.T("Pindahkan ke…"), false) {
 		m.moving = true
 	}
-	if a.menuItem(c, "link", "Salin tautan", false) {
+	if a.menuItem(c, "link", tr.T("Salin tautan"), false) {
 		m.open = false
 		mygo.Clipboard.WriteText(url)
-		a.toast("Tautan disalin")
+		a.toast(tr.T("Tautan disalin"))
 	}
-	if a.menuItem(c, "export", "Ekspor sebagai Markdown", false) {
+	if a.menuItem(c, "export", tr.T("Ekspor sebagai Markdown"), false) {
 		m.open = false
 		a.exportMarkdown(pn.id)
 	}
-	if a.menuItem(c, "web", "Buka di Notion", false) {
+	if a.menuItem(c, "web", tr.T("Buka di Notion"), false) {
 		m.open = false
 		go mygo.Shell.OpenExternal(url)
 	}
 	ui.Box(c).Height(1).Background(p.Line).Margin(4, 6)
 	if !m.confirm {
-		if a.menuItem(c, "trash", "Buang ke sampah", true) {
+		if a.menuItem(c, "trash", tr.T("Buang ke sampah"), true) {
 			m.confirm = true
 		}
 		return
 	}
-	ui.Text(c, "Buang halaman ini beserta sub-halamannya?").FontSize(12).TextColor(p.Muted).Padding(4, 10)
+	ui.Text(c, tr.T("Buang halaman ini beserta sub-halamannya?")).FontSize(12).TextColor(p.Muted).Padding(4, 10)
 	ui.Row(c).Gap(6).Padding(2, 8, 6, 8).Children(func() {
-		if ui.PrimaryButton(c, "Buang").Clicked() {
+		if ui.PrimaryButton(c, tr.T("Buang")).Clicked() {
 			m.open = false
 			a.trashPage(pn.id)
 		}
-		if a.btn(c, "Batal", nil, false, false) {
+		if a.btn(c, tr.T("Batal"), nil, false, false) {
 			m.confirm = false
 		}
 	})
@@ -344,7 +347,7 @@ func (a *App) pageMenuItems(c *ui.Context, i int, pn *panel) {
 func (a *App) iconPicker(c *ui.Context, pn *panel) {
 	p := a.pal()
 	m := &pn.menu
-	ui.Text(c, "Ikon").FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 8)
+	ui.Text(c, tr.T("Ikon")).FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 8)
 	ui.Column(c).Grid().Columns(6).Gap(2).Padding(0, 4).Children(func() {
 		for _, e := range commonEmoji {
 			b := ui.Box(c.Key("e"+e)).Size(36, 36).Radius(7).Center().Cursor(ui.CursorPointer)
@@ -358,7 +361,7 @@ func (a *App) iconPicker(c *ui.Context, pn *panel) {
 			}
 		}
 	})
-	if a.menuItem(c, "noicon", "Hapus ikon", false) {
+	if a.menuItem(c, "noicon", tr.T("Hapus ikon"), false) {
 		m.open = false
 		a.setIcon(pn.id, "")
 	}
@@ -378,7 +381,7 @@ func (a *App) setIcon(id, e string) {
 				if n != nil {
 					n.Emoji = old
 				}
-				a.toast("Gagal mengubah ikon: " + errText(err))
+				a.toast(tr.T("Gagal mengubah ikon: ") + errText(err))
 			}
 		})
 	}()
@@ -388,7 +391,7 @@ func (a *App) setIcon(id, e string) {
 func (a *App) movePicker(c *ui.Context, pn *panel) {
 	p := a.pal()
 	m := &pn.menu
-	ui.TextInput(c, &m.query).Placeholder("Pindahkan ke halaman…").AutoFocus().Label("Tujuan").FontSize(13)
+	ui.TextInput(c, &m.query).Placeholder(tr.T("Pindahkan ke halaman…")).AutoFocus().Label(tr.T("Tujuan")).FontSize(13)
 	q := strings.ToLower(m.query)
 	var targets []*node
 	for _, n := range a.nodes {
@@ -410,7 +413,7 @@ func (a *App) movePicker(c *ui.Context, pn *panel) {
 		}
 	}
 	if len(targets) == 0 {
-		ui.Text(c, "Tidak ada halaman yang cocok").FontSize(12).TextColor(p.Faint).Padding(6, 10)
+		ui.Text(c, tr.T("Tidak ada halaman yang cocok")).FontSize(12).TextColor(p.Faint).Padding(6, 10)
 	}
 }
 
@@ -430,7 +433,7 @@ func (a *App) movePage(id, to string) {
 		err := client.MovePage(context.Background(), id, to)
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal memindahkan: " + errText(err))
+				a.toast(tr.T("Gagal memindahkan: ") + errText(err))
 				return
 			}
 			if n := a.nodes[id]; n != nil {
@@ -438,7 +441,7 @@ func (a *App) movePage(id, to string) {
 				a.regroup()
 				a.set.Open[to] = true
 			}
-			a.toast("Dipindahkan ke “" + a.nodes[to].Title + "”")
+			a.toast(tr.T("Dipindahkan ke “") + a.nodes[to].Title + "”")
 		})
 	}()
 }
@@ -463,10 +466,10 @@ func (a *App) exportMarkdown(id string) {
 		}
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal mengekspor: " + errText(err))
+				a.toast(tr.T("Gagal mengekspor: ") + errText(err))
 				return
 			}
-			a.toast("Diekspor ke " + path)
+			a.toast(tr.T("Diekspor ke ") + path)
 			mygo.Shell.ShowItemInFolder(path)
 		})
 	}()
@@ -475,14 +478,14 @@ func (a *App) exportMarkdown(id string) {
 // importMarkdown makes a page under parent from each Markdown file.
 func (a *App) importMarkdown(parent string, paths []string) {
 	if parent == "" || a.nodes[parent] == nil || a.nodes[parent].Kind != "page" {
-		a.toast("Buka halaman tujuan dulu: Markdown diimpor sebagai sub-halamannya.")
+		a.toast(tr.T("Buka halaman tujuan dulu: Markdown diimpor sebagai sub-halamannya."))
 		return
 	}
 	client := a.client
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			a.toast("Tidak bisa membaca " + filepath.Base(path))
+			a.toast(tr.T("Tidak bisa membaca ") + filepath.Base(path))
 			continue
 		}
 		title := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
@@ -495,13 +498,13 @@ func (a *App) importMarkdown(parent string, paths []string) {
 			pg, err := client.CreatePageMarkdown(context.Background(), parent, title, body)
 			a.update(func() {
 				if err != nil {
-					a.toast("Gagal mengimpor " + title + ": " + errText(err))
+					a.toast(tr.T("Gagal mengimpor ") + title + ": " + errText(err))
 					return
 				}
 				a.nodes[pg.ID] = &node{ID: pg.ID, Title: title, Kind: "page", ParentID: parent, Edited: time.Now()}
 				a.regroup()
 				a.set.Open[parent] = true
-				a.toast("“" + title + "” diimpor")
+				a.toast("“" + title + tr.T("” diimpor"))
 				// The parent shows its new sub-page.
 				for _, pn := range a.panels {
 					if pn != nil && pn.id == parent && pn.session != nil {
@@ -523,7 +526,7 @@ func (a *App) importMarkdownDialog(i int) {
 		}
 	}
 	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: "Impor Markdown", Multiple: true,
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: tr.T("Impor Markdown"), Multiple: true,
 			Filters: []mygo.FileFilter{{Name: "Markdown", Extensions: []string{"md", "markdown"}}}})
 		if err != nil || len(paths) == 0 {
 			return
@@ -537,19 +540,19 @@ func (a *App) importMarkdownDialog(i int) {
 func (a *App) newDatabase(pn *panel) {
 	client, parent := a.client, pn.id
 	go func() {
-		db, err := client.CreateDatabase(context.Background(), parent, "Database baru")
+		db, err := client.CreateDatabase(context.Background(), parent, tr.T("Database baru"))
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal membuat database: " + errText(err))
+				a.toast(tr.T("Gagal membuat database: ") + errText(err))
 				return
 			}
-			a.nodes[db.ID] = &node{ID: db.ID, Title: "Database baru", Kind: "database", ParentID: parent, Edited: time.Now()}
+			a.nodes[db.ID] = &node{ID: db.ID, Title: tr.T("Database baru"), Kind: "database", ParentID: parent, Edited: time.Now()}
 			a.regroup()
 			a.set.Open[parent] = true
 			if pn.session != nil {
 				pn.session.Reshape(a.shape(pn))
 			}
-			a.toast("Database dibuat di akhir halaman")
+			a.toast(tr.T("Database dibuat di akhir halaman"))
 		})
 	}()
 }

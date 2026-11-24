@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gotion/internal/tr"
 	"sort"
 	"strings"
 
@@ -76,7 +77,7 @@ func (a *App) openTable(pn *panel, n *node) {
 				return ci.Name < cj.Name
 			})
 			t.rows, t.dsID = rows, dsID
-			if title := notion.PlainText(ds.Title); title != "" && t.title == "Memuat…" {
+			if title := notion.PlainText(ds.Title); title != "" && t.title == tr.T("Memuat…") {
 				t.title = title
 			}
 		})
@@ -169,7 +170,7 @@ func colWidth(p notion.Property) float32 {
 func (a *App) openRow(i int, t *tableView, r *notion.Page) {
 	n := a.nodes[r.ID]
 	if n == nil {
-		n = &node{ID: r.ID, Title: nonEmpty(r.Title(), "Tanpa judul"), Emoji: r.Emoji(), Kind: "page", ParentID: t.id, Edited: r.LastEditedTime}
+		n = &node{ID: r.ID, Title: nonEmpty(r.Title(), tr.T("Tanpa judul")), Emoji: r.Emoji(), Kind: "page", ParentID: t.id, Edited: r.LastEditedTime}
 		a.nodes[r.ID] = n
 	}
 	if i < 0 {
@@ -190,7 +191,7 @@ func hasValue(raw []byte) bool {
 func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 	p := a.pal()
 	t := pn.table
-	if n := a.nodes[t.id]; n != nil && n.Title != "Memuat…" {
+	if n := a.nodes[t.id]; n != nil && n.Title != tr.T("Memuat…") {
 		t.title = n.Title
 	}
 	view := a.set.Views[t.id]
@@ -204,10 +205,10 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 		if t.loading && t.dsID != "" {
 			ui.Spinner(c).Size(12, 12)
 		}
-		ui.Text(c, fmt.Sprintf("%d baris", len(t.rows))).FontSize(12).TextColor(p.Faint)
+		ui.Text(c, fmt.Sprintf(tr.T("%d baris"), len(t.rows))).FontSize(12).TextColor(p.Faint)
 		a.queryButtons(c, t)
 		ui.Row(c).Gap(2).Padding(2).Radius(7).Background(p.Sidebar).Children(func() {
-			for _, v := range []struct{ id, label string }{{"table", "Tabel"}, {"cards", "Kartu"}} {
+			for _, v := range []struct{ id, label string }{{"table", tr.T("Tabel")}, {"cards", tr.T("Kartu")}} {
 				b := ui.Text(c.Key("view"+v.id), v.label).FontSize(12).Padding(3, 10).Radius(5).Cursor(ui.CursorPointer)
 				if view == v.id {
 					b.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
@@ -225,17 +226,17 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 	case t.loading && t.dsID == "":
 		ui.Column(c).Fill().Center().Gap(10).Children(func() {
 			ui.Spinner(c).Size(22, 22)
-			ui.Text(c, "Memuat database…").FontSize(13).TextColor(p.Faint)
+			ui.Text(c, tr.T("Memuat database…")).FontSize(13).TextColor(p.Faint)
 		})
 		return
 	case t.err != "":
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, "Gagal memuat database: "+t.err).FontSize(14).TextColor(c.Theme().Danger)
+			ui.Text(c, tr.T("Gagal memuat database: ")+t.err).FontSize(14).TextColor(c.Theme().Danger)
 		})
 		return
 	case len(t.rows) == 0 && len(t.query.conds) == 0:
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, "Database ini masih kosong").FontSize(14).TextColor(p.Faint)
+			ui.Text(c, tr.T("Database ini masih kosong")).FontSize(14).TextColor(p.Faint)
 		})
 		return
 	}
@@ -290,20 +291,20 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 								} else {
 									ui.Icon(c, iconPage).Size(14, 14).TextColor(p.Faint).MarginEnd(6)
 								}
-								ui.Text(c, nonEmpty(r.Title(), "Tanpa judul")).FontSize(14).FontWeight(500).SingleLine().MinWidth(0)
+								ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(14).FontWeight(500).SingleLine().MinWidth(0)
 							})
 							if e.Clicked() {
 								a.openRow(i, t, r)
 							}
 							e.ContextMenu(func(m *ui.Menu) {
-								if m.Item("Buka").Chosen() {
+								if m.Item(tr.T("Buka")).Chosen() {
 									a.openRow(i, t, r)
 								}
-								if m.Item("Buka di samping").Chosen() {
+								if m.Item(tr.T("Buka di samping")).Chosen() {
 									a.openRow(-1, t, r)
 								}
 								m.Separator()
-								if m.Item("Buang ke sampah").Chosen() {
+								if m.Item(tr.T("Buang ke sampah")).Chosen() {
 									a.trashRow(t, r)
 								}
 							})
@@ -339,7 +340,7 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 						if e := r.Emoji(); e != "" {
 							emoji.View(c, e, 18)
 						}
-						ui.Text(c, nonEmpty(r.Title(), "Tanpa judul")).FontSize(15).FontWeight(600).MaxLines(2).MinWidth(0)
+						ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(15).FontWeight(600).MaxLines(2).MinWidth(0)
 					})
 					shown := 0
 					for _, col := range t.columns {
@@ -354,7 +355,7 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 							own = true
 						}
 					}
-					ui.Text(c, "Diubah "+ago(r.LastEditedTime)).FontSize(11).TextColor(p.Faint)
+					ui.Text(c, tr.T("Diubah ")+ago(r.LastEditedTime)).FontSize(11).TextColor(p.Faint)
 				})
 				if card.Clicked() && !own && !t.edit.open {
 					a.openRow(i, t, r)

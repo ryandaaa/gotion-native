@@ -2,7 +2,9 @@ package notion
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"gotion/internal/tr"
 	"strconv"
 	"strings"
 	"time"
@@ -40,7 +42,7 @@ func Value(p Property, text string, on bool, names []string) (send any, show jso
 		}
 		n, perr := strconv.ParseFloat(strings.ReplaceAll(text, ",", "."), 64)
 		if perr != nil {
-			return nil, nil, fmt.Errorf("bukan angka: %q", text)
+			return nil, nil, fmt.Errorf(tr.T("bukan angka: %q"), text)
 		}
 		v = n
 	case "checkbox":
@@ -63,7 +65,7 @@ func Value(p Property, text string, on bool, names []string) (send any, show jso
 			break
 		}
 		if _, perr := time.Parse("2006-01-02", text); perr != nil {
-			return nil, nil, fmt.Errorf("tanggal harus TTTT-BB-HH, misalnya 2026-12-31")
+			return nil, nil, errors.New(tr.T("tanggal harus TTTT-BB-HH, misalnya 2026-12-31"))
 		}
 		v = map[string]any{"start": text}
 	case "url", "email", "phone_number":
@@ -73,7 +75,7 @@ func Value(p Property, text string, on bool, names []string) (send any, show jso
 			v = text
 		}
 	default:
-		return nil, nil, fmt.Errorf("properti %s tidak bisa diubah dari sini", p.Type)
+		return nil, nil, fmt.Errorf(tr.T("properti %s tidak bisa diubah dari sini"), p.Type)
 	}
 	send = map[string]any{p.Type: v}
 	shown := map[string]any{"type": p.Type, "id": p.ID, p.Type: v}
@@ -100,7 +102,7 @@ func LinksValue(p Property, links []Linked) (send any, show json.RawMessage, err
 			items = append(items, map[string]any{"id": l.ID})
 			shown = append(shown, map[string]any{"id": l.ID, "name": l.Name})
 		default:
-			return nil, nil, fmt.Errorf("properti %s tidak menunjuk orang atau halaman", p.Type)
+			return nil, nil, fmt.Errorf(tr.T("properti %s tidak menunjuk orang atau halaman"), p.Type)
 		}
 	}
 	send = map[string]any{p.Type: items}

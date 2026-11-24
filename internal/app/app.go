@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"gotion/internal/tr"
 	"os"
 	"path/filepath"
 	"sort"
@@ -84,6 +85,7 @@ type App struct {
 	tokenInput string
 	checking   bool
 	tokenErr   string
+	tokenOpen  bool // the integration token's steps unfolded
 
 	// sidebar
 	nodes     map[string]*node
@@ -91,7 +93,10 @@ type App struct {
 	databases []*node
 	loading   bool
 	loadErr   string
-	query     string
+	// searched tells that Notion said which pages there are, at least
+	// once since signing in: none then means none were shared.
+	searched bool
+	query    string
 
 	// panels: the first always, the second when split; each shows its
 	// active tab
@@ -130,6 +135,7 @@ type App struct {
 func New() *App {
 	a := &App{panels: [2]*panel{{}, nil}}
 	a.set = loadSettings()
+	a.applyLanguage()
 	if raw := loadToken(); raw != "" {
 		a.client = a.clientFor(parseCreds(raw))
 	}
@@ -197,6 +203,8 @@ type settings struct {
 	Scroll map[string]int `json:"scroll"`
 	// Views is how each database shows: "table" or "cards".
 	Views map[string]string `json:"views"`
+	// Language is "id" or "en", or "" to follow the system's.
+	Language string `json:"language"`
 }
 
 func loadSettings() settings {
@@ -304,17 +312,18 @@ func deleteToken() {
 func (a *App) checkToken() {
 	tok := cleanToken(a.tokenInput)
 	if tok == "" {
-		a.tokenErr = "Tempel token dulu."
+		a.tokenErr = tr.T("Tempel token dulu.")
 		return
 	}
 	if !strings.HasPrefix(tok, "ntn_") && !strings.HasPrefix(tok, "secret_") {
-		a.tokenErr = "Token Notion biasanya diawali ntn_ (atau secret_ untuk yang lama). Cek lagi yang kamu salin."
+		a.tokenErr = tr.T("Token Notion biasanya diawali ntn_ (atau secret_ untuk yang lama). Cek lagi yang kamu salin.")
 		return
 	}
 	a.signIn(creds{Access: tok})
 }
 
 func (a *App) signOut() {
+	a.searched = false
 	a.stopLive()
 	for _, p := range a.panels {
 		if p != nil && p.session != nil {
@@ -368,6 +377,7 @@ func (a *App) refresh() {
 				a.loadErr = errText(err)
 				return
 			}
+			a.searched = true
 			a.setPages(pages)
 			a.saveCache(pages)
 		})
@@ -394,7 +404,7 @@ func (a *App) setPages(pages []*notion.Page) {
 		}
 		title := p.Title()
 		if title == "" {
-			title = "Tanpa judul"
+			title = tr.T("Tanpa judul")
 		}
 		a.nodes[p.ID] = &node{ID: p.ID, Title: title, Emoji: p.Emoji(), Kind: kind, ParentID: p.Parent.ID(), Edited: p.LastEditedTime}
 	}
@@ -477,7 +487,7 @@ func (a *App) registerChildren(pageID string, extras []doc.Extra) {
 		}
 		title := strings.TrimSpace(x.Title)
 		if title == "" || title == "-" {
-			title = map[string]string{"page": "Tanpa judul", "database": "Database tanpa judul"}[kind]
+			title = map[string]string{"page": tr.T("Tanpa judul"), "database": tr.T("Database tanpa judul")}[kind]
 		}
 		a.nodes[x.ID] = &node{ID: x.ID, Title: title, Kind: kind, ParentID: pageID}
 		added = true
@@ -508,7 +518,7 @@ func (a *App) path(id string) []*node {
 func (a *App) openID(id, kind, parent string, i int) {
 	n := a.nodes[id]
 	if n == nil {
-		n = &node{ID: id, Title: "Memuat…", Kind: kind, ParentID: parent}
+		n = &node{ID: id, Title: tr.T("Memuat…"), Kind: kind, ParentID: parent}
 		a.nodes[id] = n
 		a.regroup()
 	}
@@ -520,7 +530,7 @@ func (a *App) openID(id, kind, parent string, i int) {
 func (a *App) navigateID(id, kind, parent string, i int) {
 	n := a.nodes[id]
 	if n == nil {
-		n = &node{ID: id, Title: "Memuat…", Kind: kind, ParentID: parent}
+		n = &node{ID: id, Title: tr.T("Memuat…"), Kind: kind, ParentID: parent}
 		a.nodes[id] = n
 		a.regroup()
 	}
@@ -802,7 +812,7 @@ func (a *App) openPage(p *panel, id string) {
 				title := s.Page.Title()
 				p.title, p.titleSent = title, title
 				if n := a.nodes[id]; n != nil {
-					n.Title = nonEmpty(title, "Tanpa judul")
+					n.Title = nonEmpty(title, tr.T("Tanpa judul"))
 					n.Emoji = s.Page.Emoji()
 				}
 			}
@@ -832,12 +842,12 @@ func (a *App) sendTitle(p *panel) {
 	}
 	p.titleSent = title
 	if n := a.nodes[p.id]; n != nil {
-		n.Title = nonEmpty(title, "Tanpa judul")
+		n.Title = nonEmpty(title, tr.T("Tanpa judul"))
 	}
 	client, id, prop := a.client, p.id, p.session.Page.TitleProperty()
 	go func() {
 		if err := client.SetTitle(context.Background(), id, prop, title); err != nil {
-			a.update(func() { a.toast("Judul gagal disimpan: " + errText(err)) })
+			a.update(func() { a.toast(tr.T("Judul gagal disimpan: ") + errText(err)) })
 		}
 	}()
 }
@@ -845,11 +855,11 @@ func (a *App) sendTitle(p *panel) {
 // newPage makes a page under parent and opens it.
 func (a *App) newPage(parent string) {
 	if parent == "" {
-		a.toast("Pilih halaman dulu: integrasi Notion hanya bisa membuat halaman di dalam halaman lain.")
+		a.toast(tr.T("Pilih halaman dulu: integrasi Notion hanya bisa membuat halaman di dalam halaman lain."))
 		return
 	}
 	if n := a.nodes[parent]; n != nil && n.Kind != "page" {
-		a.toast("Halaman baru hanya bisa dibuat di dalam halaman, bukan database.")
+		a.toast(tr.T("Halaman baru hanya bisa dibuat di dalam halaman, bukan database."))
 		return
 	}
 	client := a.client
@@ -857,15 +867,15 @@ func (a *App) newPage(parent string) {
 		p, err := client.CreatePage(context.Background(), parent, "")
 		a.update(func() {
 			if err != nil {
-				a.toast("Gagal membuat halaman: " + errText(err))
+				a.toast(tr.T("Gagal membuat halaman: ") + errText(err))
 				return
 			}
-			n := &node{ID: p.ID, Title: "Tanpa judul", Kind: "page", ParentID: parent, Edited: time.Now()}
+			n := &node{ID: p.ID, Title: tr.T("Tanpa judul"), Kind: "page", ParentID: parent, Edited: time.Now()}
 			a.nodes[p.ID] = n
 			a.regroup()
 			a.set.Open[parent] = true
 			a.open(n, a.focus)
-			a.toast("Halaman baru dibuat")
+			a.toast(tr.T("Halaman baru dibuat"))
 		})
 	}()
 }
@@ -879,4 +889,47 @@ func (a *App) imageIn(p *panel, id string) ui.ImageSource {
 		return a.imageOf(id)
 	}
 	return nil
+}
+
+// PreferredLanguages are the languages the user reads, most preferred
+// first, as the system says (main sets it to MyGo's).
+var PreferredLanguages = func() []string { return nil }
+
+// applyLanguage makes gotion speak the language of the settings, or the
+// first of the system's it is written in.
+func (a *App) applyLanguage() {
+	l := a.set.Language
+	if l != tr.ID && l != tr.EN {
+		l = tr.Pick(PreferredLanguages())
+	}
+	tr.Set(l)
+}
+
+// ApplyLanguage follows the language settings again, once the system's
+// languages are known.
+func (a *App) ApplyLanguage() { a.applyLanguage() }
+
+// setLanguage changes the language now and for the next launches.
+func (a *App) setLanguage(l string) {
+	a.set.Language = l
+	a.applyLanguage()
+	a.saveSettings()
+}
+
+// languagePicker is the choice of language: the names in their own
+// language, so whoever reads neither still finds theirs.
+func (a *App) languagePicker(c *ui.Context) {
+	cur := a.set.Language
+	if cur != tr.ID && cur != tr.EN {
+		cur = "auto"
+	}
+	before := cur
+	a.segmented(c, "lang", &cur, []struct{ id, label string }{
+		{"auto", tr.T("Ikut sistem")}, {tr.ID, "Bahasa Indonesia"}, {tr.EN, "English"}})
+	if cur != before {
+		if cur == "auto" {
+			cur = ""
+		}
+		a.setLanguage(cur)
+	}
 }

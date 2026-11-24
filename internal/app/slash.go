@@ -1,6 +1,7 @@
 package app
 
 import (
+	"gotion/internal/tr"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -25,21 +26,21 @@ type command struct {
 }
 
 var commands = []command{
-	{"Teks", "Paragraf biasa", "text paragraf teks", func(a *App, pn *panel) { plain(pn.doc) }},
-	{"Heading 1", "Judul besar", "h1 heading judul", func(a *App, pn *panel) { plain(pn.doc); pn.doc.SetHeading(1) }},
-	{"Heading 2", "Judul sedang", "h2 heading subjudul", func(a *App, pn *panel) { plain(pn.doc); pn.doc.SetHeading(2) }},
-	{"Heading 3", "Judul kecil", "h3 heading", func(a *App, pn *panel) { plain(pn.doc); pn.doc.SetHeading(3) }},
-	{"To-do", "Daftar dengan centang", "todo task checklist centang", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Tasks) }},
-	{"Bullet", "Daftar berpoin", "bullet list poin", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Bullets) }},
-	{"Bernomor", "Daftar bernomor", "numbered number nomor list", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Numbers) }},
-	{"Kutipan", "Quote", "quote kutipan", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleQuote() }},
-	{"Kode", "Blok kode", "code kode", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleCodeBlock() }},
-	{"Pembatas", "Garis pemisah", "divider pembatas garis hr", func(a *App, pn *panel) {
+	{tr.N("Teks"), tr.N("Paragraf biasa"), "text paragraf teks", func(a *App, pn *panel) { plain(pn.doc) }},
+	{"Heading 1", tr.N("Judul besar"), "h1 heading judul", func(a *App, pn *panel) { plain(pn.doc); pn.doc.SetHeading(1) }},
+	{"Heading 2", tr.N("Judul sedang"), "h2 heading subjudul", func(a *App, pn *panel) { plain(pn.doc); pn.doc.SetHeading(2) }},
+	{"Heading 3", tr.N("Judul kecil"), "h3 heading", func(a *App, pn *panel) { plain(pn.doc); pn.doc.SetHeading(3) }},
+	{"To-do", tr.N("Daftar dengan centang"), "todo task checklist centang", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Tasks) }},
+	{"Bullet", tr.N("Daftar berpoin"), "bullet list poin", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Bullets) }},
+	{tr.N("Bernomor"), tr.N("Daftar bernomor"), "numbered number nomor list", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Numbers) }},
+	{tr.N("Kutipan"), "Quote", "quote kutipan", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleQuote() }},
+	{tr.N("Kode"), tr.N("Blok kode"), "code kode", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleCodeBlock() }},
+	{tr.N("Pembatas"), tr.N("Garis pemisah"), "divider pembatas garis hr", func(a *App, pn *panel) {
 		pn.doc.Insert(doc.Divider())
 		pn.doc.InsertText("\n")
 	}},
-	{"Halaman", "Sub-halaman baru", "page halaman", func(a *App, pn *panel) { a.newPage(pn.id) }},
-	{"Database", "Tabel database baru", "database tabel table db", func(a *App, pn *panel) { a.newDatabase(pn) }},
+	{tr.N("Sub-halaman"), tr.N("Sub-halaman baru"), "page halaman", func(a *App, pn *panel) { a.newPage(pn.id) }},
+	{"Database", tr.N("Tabel database baru"), "database tabel table db", func(a *App, pn *panel) { a.newDatabase(pn) }},
 }
 
 // plain makes the paragraph at the caret a body paragraph.
@@ -54,7 +55,7 @@ func (s *slashState) matches() []command {
 	q := strings.ToLower(s.query)
 	var out []command
 	for _, cmd := range commands {
-		if q == "" || strings.Contains(strings.ToLower(cmd.label), q) || strings.Contains(cmd.keys, q) {
+		if q == "" || strings.Contains(strings.ToLower(tr.T(cmd.label)), q) || strings.Contains(strings.ToLower(cmd.label), q) || strings.Contains(cmd.keys, q) {
 			out = append(out, cmd)
 		}
 	}
@@ -140,7 +141,7 @@ func (a *App) slashView(c *ui.Context, pn *panel) {
 	ui.Column(c.Key("slash-menu")).Absolute().Left(r.X).Top(r.Y+r.H+6).Width(280).ZIndex(20).Padding(6).Gap(1).
 		TransformOrigin(0, 0).Transition(popIn).
 		Background(p.Panel).Radius(10).Border(1, p.Line).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, 0.16)).Children(func() {
-		ui.Text(c, "Block dasar").FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 8)
+		ui.Text(c, tr.T("Block dasar")).FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 8)
 		for j, cmd := range items {
 			row := ui.Row(c.Key("cmd"+cmd.label)).AlignItems(ui.Center).Gap(10).Padding(6, 8).Radius(7).Cursor(ui.CursorPointer)
 			if j == s.sel || row.Hovered() {
@@ -148,15 +149,15 @@ func (a *App) slashView(c *ui.Context, pn *panel) {
 			}
 			row.Children(func() {
 				ui.Column(c).Children(func() {
-					ui.Text(c, cmd.label).FontSize(14).FontWeight(500)
-					ui.Text(c, cmd.hint).FontSize(12).TextColor(p.Faint)
+					ui.Text(c, tr.T(cmd.label)).FontSize(14).FontWeight(500)
+					ui.Text(c, tr.T(cmd.hint)).FontSize(12).TextColor(p.Faint)
 				})
 			})
 			if row.Clicked() {
 				a.runCommand(pn, cmd)
 			}
 		}
-		ui.Text(c, "↑↓ pilih · Enter masukkan · Esc tutup").FontSize(11).TextColor(p.Faint).Padding(6, 8, 2, 8)
+		ui.Text(c, tr.T("↑↓ pilih · Enter masukkan · Esc tutup")).FontSize(11).TextColor(p.Faint).Padding(6, 8, 2, 8)
 	})
 }
 
@@ -189,17 +190,17 @@ func (a *App) formatBar(c *ui.Context, pn *panel) {
 	ui.Row(c.Key("format-bar")).Absolute().Left(max(8, r.X-120)).Top(top).ZIndex(20).Padding(4).Gap(2).AlignItems(ui.Center).
 		Transition(fadeIn).
 		Background(p.Panel).Radius(9).Border(1, p.Line).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.14)).Children(func() {
-		fmtButton(c, p, "B", "Tebal (Ctrl+B)", f.Bold == richtext.FormatOn, pn, pn.doc.ToggleBold).Bold()
-		fmtButton(c, p, "I", "Miring (Ctrl+I)", f.Italic == richtext.FormatOn, pn, pn.doc.ToggleItalic).Italic()
-		fmtButton(c, p, "U", "Garis bawah (Ctrl+U)", f.Underline == richtext.FormatOn, pn, pn.doc.ToggleUnderline).Underline()
-		fmtButton(c, p, "S", "Coret", f.Strikethrough == richtext.FormatOn, pn, pn.doc.ToggleStrikethrough).Strikethrough()
-		fmtButton(c, p, "</>", "Kode (Ctrl+E)", f.Code == richtext.FormatOn, pn, pn.doc.ToggleCode)
-		fmtButton(c, p, "Link", "Tautan (Ctrl+K di editor)", f.Link != "", pn, func() {
+		fmtButton(c, p, "B", tr.T("Tebal (Ctrl+B)"), f.Bold == richtext.FormatOn, pn, pn.doc.ToggleBold).Bold()
+		fmtButton(c, p, "I", tr.T("Miring (Ctrl+I)"), f.Italic == richtext.FormatOn, pn, pn.doc.ToggleItalic).Italic()
+		fmtButton(c, p, "U", tr.T("Garis bawah (Ctrl+U)"), f.Underline == richtext.FormatOn, pn, pn.doc.ToggleUnderline).Underline()
+		fmtButton(c, p, "S", tr.T("Coret"), f.Strikethrough == richtext.FormatOn, pn, pn.doc.ToggleStrikethrough).Strikethrough()
+		fmtButton(c, p, "</>", tr.T("Kode (Ctrl+E)"), f.Code == richtext.FormatOn, pn, pn.doc.ToggleCode)
+		fmtButton(c, p, "Link", tr.T("Tautan (Ctrl+K di editor)"), f.Link != "", pn, func() {
 			pn.slash.link, pn.slash.url = !pn.slash.link, f.Link
 		})
 		ui.Box(c).Width(1).Height(18).Background(p.Line).Margin(0, 4)
 		for _, fc := range formatColors {
-			dot := ui.Box(c.Key("color"+fc.name)).Size(16, 16).Radius(8).Cursor(ui.CursorPointer).Tooltip("Warna " + fc.name).KeepFocus()
+			dot := ui.Box(c.Key("color"+fc.name)).Size(16, 16).Radius(8).Cursor(ui.CursorPointer).Tooltip(tr.T("Warna ") + fc.name).KeepFocus()
 			if fc.name == "default" {
 				dot.Border(1.5, p.Faint)
 			} else {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"gotion/internal/tr"
 	"os"
 	"sync"
 	"testing"
@@ -49,6 +50,9 @@ func TestMain(m *testing.M) {
 	os.Setenv("XDG_CONFIG_HOME", dir)
 	os.Setenv("HOME", dir)
 	os.Unsetenv("NOTION_TOKEN")
+	// The tests read gotion's texts in Indonesian, its own language.
+	PreferredLanguages = func() []string { return []string{"id"} }
+	tr.Set(tr.ID)
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)

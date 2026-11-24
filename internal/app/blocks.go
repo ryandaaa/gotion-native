@@ -1,6 +1,7 @@
 package app
 
 import (
+	"gotion/internal/tr"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -120,15 +121,15 @@ var blockKinds = []struct {
 	label string
 	style richtext.ParagraphStyle
 }{
-	{"Teks", richtext.ParagraphStyle{}},
+	{tr.N("Teks"), richtext.ParagraphStyle{}},
 	{"H1", richtext.ParagraphStyle{Heading: 1}},
 	{"H2", richtext.ParagraphStyle{Heading: 2}},
 	{"H3", richtext.ParagraphStyle{Heading: 3}},
 	{"Bullet", richtext.ParagraphStyle{List: richtext.Bullets}},
-	{"Nomor", richtext.ParagraphStyle{List: richtext.Numbers}},
+	{tr.N("Nomor"), richtext.ParagraphStyle{List: richtext.Numbers}},
 	{"To-do", richtext.ParagraphStyle{List: richtext.Tasks}},
-	{"Kutipan", richtext.ParagraphStyle{Quote: true}},
-	{"Kode", richtext.ParagraphStyle{CodeBlock: true}},
+	{tr.N("Kutipan"), richtext.ParagraphStyle{Quote: true}},
+	{tr.N("Kode"), richtext.ParagraphStyle{CodeBlock: true}},
 }
 
 var iconGrip = icon(`<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>`)
@@ -192,7 +193,7 @@ func (a *App) handles(c *ui.Context, pn *panel, box ui.Element, pad float32) {
 	}
 	// A + beside the block adds an empty line under it, the caret there.
 	add := ui.Box(c.Key("add-below")).Absolute().Left(max(4, pad-30)).Top(box0.Top+min(box0.Height, 26)/2-11).
-		Size(22, 22).Radius(5).Center().Cursor(ui.CursorPointer).ZIndex(11).Label("Baris baru di bawah").Tooltip("Baris baru di bawahnya")
+		Size(22, 22).Radius(5).Center().Cursor(ui.CursorPointer).ZIndex(11).Label(tr.T("Baris baru di bawah")).Tooltip(tr.T("Baris baru di bawahnya"))
 	if add.Hovered() {
 		add.Background(p.Hover)
 	}
@@ -254,7 +255,7 @@ func (a *App) edited(pn *panel) {
 
 func (a *App) dropBlock(pn *panel, from, to int) {
 	if !a.movable(pn, from) {
-		a.toast("Block ini tidak bisa dipindah dari gotion: pindahkan di Notion supaya isinya tidak hilang.")
+		a.toast(tr.T("Block ini tidak bisa dipindah dari gotion: pindahkan di Notion supaya isinya tidak hilang."))
 		return
 	}
 	if moveBlock(pn.doc, from, to) {
@@ -284,15 +285,15 @@ func (a *App) blockMenu(c *ui.Context, pn *panel, i int) {
 	}
 	ui.Column(c).Width(220).Padding(4).Gap(1).Children(func() {
 		if !movable {
-			ui.Text(c, "Sub-halaman, media, tabel, dan block yang punya isi di dalamnya diubah di Notion, supaya isinya tidak hilang.").
+			ui.Text(c, tr.T("Sub-halaman, media, tabel, dan block yang punya isi di dalamnya diubah di Notion, supaya isinya tidak hilang.")).
 				FontSize(12).TextColor(p.Faint).Padding(6, 8)
 			return
 		}
-		ui.Text(c, "Ubah jadi").FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 10)
+		ui.Text(c, tr.T("Ubah jadi")).FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 10)
 		ui.Column(c).Grid().Columns(3).Gap(2).Padding(0, 4).Children(func() {
 			for _, k := range blockKinds {
 				style := k.style
-				b := ui.Text(c.Key("kind"+k.label), k.label).FontSize(13).Padding(6, 0).TextAlign(ui.Center).Radius(6).Cursor(ui.CursorPointer)
+				b := ui.Text(c.Key("kind"+k.label), tr.T(k.label)).FontSize(13).Padding(6, 0).TextAlign(ui.Center).Radius(6).Cursor(ui.CursorPointer)
 				if b.Hovered() {
 					b.Background(p.Hover)
 				}
@@ -304,8 +305,8 @@ func (a *App) blockMenu(c *ui.Context, pn *panel, i int) {
 			}
 		})
 		ui.Box(c).Height(1).Background(p.Line).Margin(4, 6)
-		item("dup", "Duplikat", false, func() { duplicateBlock(pn.doc, i) })
-		item("up", "Pindah ke atas", false, func() {
+		item("dup", tr.T("Duplikat"), false, func() { duplicateBlock(pn.doc, i) })
+		item("up", tr.T("Pindah ke atas"), false, func() {
 			paras := paragraphsOf(pn.doc)
 			first, _ := blockRange(paras, i)
 			if first > 0 {
@@ -313,7 +314,7 @@ func (a *App) blockMenu(c *ui.Context, pn *panel, i int) {
 				moveBlock(pn.doc, i, prev)
 			}
 		})
-		item("down", "Pindah ke bawah", false, func() {
+		item("down", tr.T("Pindah ke bawah"), false, func() {
 			paras := paragraphsOf(pn.doc)
 			_, last := blockRange(paras, i)
 			if last+1 < len(paras) {
@@ -322,7 +323,7 @@ func (a *App) blockMenu(c *ui.Context, pn *panel, i int) {
 			}
 		})
 		ui.Box(c).Height(1).Background(p.Line).Margin(4, 6)
-		item("del", "Hapus", true, func() { deleteBlock(pn.doc, i) })
+		item("del", tr.T("Hapus"), true, func() { deleteBlock(pn.doc, i) })
 	})
 }
 

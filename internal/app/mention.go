@@ -1,6 +1,7 @@
 package app
 
 import (
+	"gotion/internal/tr"
 	"sort"
 	"strings"
 
@@ -130,7 +131,7 @@ func (a *App) mentionView(c *ui.Context, pn *panel) {
 	ui.Column(c.Key("mention-menu")).Absolute().Left(r.X).Top(r.Y+r.H+6).Width(280).ZIndex(20).Padding(6).Gap(1).
 		TransformOrigin(0, 0).Transition(popIn).
 		Background(p.Panel).Radius(10).Border(1, p.Line).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, 0.16)).Children(func() {
-		ui.Text(c, "Sebut").FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 8)
+		ui.Text(c, tr.T("Sebut")).FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 8)
 		for j, it := range items {
 			row := ui.Row(c.Key("mn"+it.id)).AlignItems(ui.Center).Gap(8).Padding(6, 8).Radius(7).Cursor(ui.CursorPointer)
 			if j == m.sel || row.Hovered() {
@@ -147,7 +148,7 @@ func (a *App) mentionView(c *ui.Context, pn *panel) {
 				default:
 					ui.Icon(c, iconPage).Size(16, 16).TextColor(p.Faint)
 				}
-				ui.Text(c, nonEmpty(it.label, "Tanpa judul")).FontSize(14).SingleLine().MinWidth(0)
+				ui.Text(c, nonEmpty(it.label, tr.T("Tanpa judul"))).FontSize(14).SingleLine().MinWidth(0)
 			})
 			if row.Clicked() {
 				a.insertMention(pn, it)

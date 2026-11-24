@@ -1,6 +1,7 @@
 package app
 
 import (
+	"gotion/internal/tr"
 	"sort"
 	"strings"
 	"time"
@@ -73,8 +74,8 @@ func (a *App) switcherView(c *ui.Context) {
 			TransformOrigin(0.5, 0).Transition(popIn).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(10).Padding(12, 16).BorderWidth(0, 0, 1, 0).BorderColor(p.Line).Children(func() {
 				ui.Icon(c, iconSearch).Size(16, 16).TextColor(p.Faint)
-				in := ui.TextInput(c, &s.query).Placeholder("Cari halaman atau database…").Grow(1).AutoFocus().
-					Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).FontSize(16).Label("Cari")
+				in := ui.TextInput(c, &s.query).Placeholder(tr.T("Cari halaman atau database…")).Grow(1).AutoFocus().
+					Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).FontSize(16).Label(tr.T("Cari"))
 				in.OnTextKey(func(k ui.TextKey) bool {
 					switch k.Key {
 					case ui.KeyDown:
@@ -97,7 +98,7 @@ func (a *App) switcherView(c *ui.Context) {
 			})
 			ui.Column(c).Padding(6).Gap(1).MaxHeight(440).Children(func() {
 				if len(matches) == 0 {
-					ui.Text(c, "Tidak ada yang cocok").FontSize(13).TextColor(p.Faint).Padding(12)
+					ui.Text(c, tr.T("Tidak ada yang cocok")).FontSize(13).TextColor(p.Faint).Padding(12)
 				}
 				for i, n := range matches {
 					row := ui.Row(c.Key("sw"+n.ID)).AlignItems(ui.Center).Gap(10).Padding(8, 10).Radius(8).Cursor(ui.CursorPointer)
@@ -126,7 +127,7 @@ func (a *App) switcherView(c *ui.Context) {
 					}
 				}
 			})
-			ui.Text(c, "↑↓ pilih · Enter buka · Ctrl+klik buka di samping · Esc tutup").FontSize(11).TextColor(p.Faint).Padding(8, 16)
+			ui.Text(c, tr.T("↑↓ pilih · Enter buka · Ctrl+klik buka di samping · Esc tutup")).FontSize(11).TextColor(p.Faint).Padding(8, 16)
 		})
 	})
 }

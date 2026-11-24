@@ -2,6 +2,7 @@ package notion
 
 import (
 	"context"
+	"gotion/internal/tr"
 	"net/url"
 	"time"
 )
@@ -195,10 +196,10 @@ func (c *Client) CreateDatabase(ctx context.Context, parent, title string) (*Dat
 		"parent": map[string]any{"type": "page_id", "page_id": parent},
 		"title":  []any{map[string]any{"text": map[string]any{"content": title}}},
 		"initial_data_source": map[string]any{"properties": map[string]any{
-			"Nama":    map[string]any{"type": "title", "title": map[string]any{}},
-			"Status":  map[string]any{"type": "select", "select": map[string]any{"options": []any{opt("Belum", "gray"), opt("Berjalan", "yellow"), opt("Selesai", "green")}}},
-			"Tanggal": map[string]any{"type": "date", "date": map[string]any{}},
-			"Beres":   map[string]any{"type": "checkbox", "checkbox": map[string]any{}},
+			tr.T("Nama"):    map[string]any{"type": "title", "title": map[string]any{}},
+			"Status":        map[string]any{"type": "select", "select": map[string]any{"options": []any{opt(tr.T("Belum"), "gray"), opt(tr.T("Berjalan"), "yellow"), opt(tr.T("Selesai"), "green")}}},
+			tr.T("Tanggal"): map[string]any{"type": "date", "date": map[string]any{}},
+			tr.T("Beres"):   map[string]any{"type": "checkbox", "checkbox": map[string]any{}},
 		}},
 	}
 	var d Database
@@ -216,9 +217,9 @@ func (c *Client) UpdateSchema(ctx context.Context, id string, props map[string]a
 // ColumnTypes are the kinds of column the app adds, Notion's names and the
 // app's, in the order it offers them.
 var ColumnTypes = []struct{ Type, Label string }{
-	{"rich_text", "Teks"}, {"number", "Angka"}, {"select", "Pilihan"}, {"multi_select", "Banyak pilihan"},
-	{"date", "Tanggal"}, {"checkbox", "Centang"}, {"url", "Tautan"}, {"email", "Email"}, {"phone_number", "Telepon"},
-	{"people", "Orang"}, {"files", "File"},
+	{"rich_text", tr.N("Teks")}, {"number", tr.N("Angka")}, {"select", tr.N("Pilihan")}, {"multi_select", tr.N("Banyak pilihan")},
+	{"date", tr.N("Tanggal")}, {"checkbox", tr.N("Centang")}, {"url", tr.N("Tautan")}, {"email", "Email"}, {"phone_number", tr.N("Telepon")},
+	{"people", tr.N("Orang")}, {"files", "File"},
 }
 
 // AddOption is the schema change that adds an option to a select, status
