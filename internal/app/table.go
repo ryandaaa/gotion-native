@@ -19,6 +19,7 @@ type tableView struct {
 	title   string
 	edit    cellEdit
 	adding  newRow
+	query   tableQuery
 	columns []notion.Property
 	rows    []*notion.Page
 	loading bool
@@ -152,6 +153,10 @@ func (a *App) openRow(i int, t *tableView, r *notion.Page) {
 		n = &node{ID: r.ID, Title: nonEmpty(r.Title(), "Tanpa judul"), Emoji: r.Emoji(), Kind: "page", ParentID: t.id, Edited: r.LastEditedTime}
 		a.nodes[r.ID] = n
 	}
+	if i < 0 {
+		a.openBeside(n)
+		return
+	}
 	a.open(n, i)
 }
 
@@ -177,7 +182,11 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 		if t.loading || t.err != "" {
 			return
 		}
+		if t.loading && t.dsID != "" {
+			ui.Spinner(c).Size(12, 12)
+		}
 		ui.Text(c, fmt.Sprintf("%d baris", len(t.rows))).FontSize(12).TextColor(p.Faint)
+		a.queryButtons(c, t)
 		ui.Row(c).Gap(2).Padding(2).Radius(7).Background(p.Sidebar).Children(func() {
 			for _, v := range []struct{ id, label string }{{"table", "Tabel"}, {"cards", "Kartu"}} {
 				b := ui.Text(c.Key("view"+v.id), v.label).FontSize(12).Padding(3, 10).Radius(5).Cursor(ui.CursorPointer)
@@ -194,7 +203,7 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 		})
 	})
 	switch {
-	case t.loading:
+	case t.loading && t.dsID == "":
 		ui.Column(c).Fill().Center().Gap(10).Children(func() {
 			ui.Spinner(c).Size(22, 22)
 			ui.Text(c, "Memuat database…").FontSize(13).TextColor(p.Faint)
@@ -205,7 +214,7 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 			ui.Text(c, "Gagal memuat database: "+t.err).FontSize(14).TextColor(c.Theme().Danger)
 		})
 		return
-	case len(t.rows) == 0:
+	case len(t.rows) == 0 && len(t.query.conds) == 0:
 		ui.Column(c).Fill().Center().Children(func() {
 			ui.Text(c, "Database ini masih kosong").FontSize(14).TextColor(p.Faint)
 		})
@@ -271,6 +280,18 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 							if e.Clicked() {
 								a.openRow(i, t, r)
 							}
+							e.ContextMenu(func(m *ui.Menu) {
+								if m.Item("Buka").Chosen() {
+									a.openRow(i, t, r)
+								}
+								if m.Item("Buka di samping").Chosen() {
+									a.openRow(-1, t, r)
+								}
+								m.Separator()
+								if m.Item("Buang ke sampah").Chosen() {
+									a.trashRow(t, r)
+								}
+							})
 							continue
 						}
 						a.editable(c, t, r, col, e, func() { a.value(c, r.Properties[col.Name], col.Type) })

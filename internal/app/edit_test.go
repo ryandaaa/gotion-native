@@ -156,3 +156,22 @@ func TestEditorShot(t *testing.T) {
 	tester.Advance(time.Second)
 	snapshot(t, tester, "db-edit-status")
 }
+
+func TestFilterAndSortQuery(t *testing.T) {
+	a, tv, rec, tester := editApp(t)
+	_ = a
+	tv.query.conds = []condition{{prop: "Status", value: "Done"}, {prop: "Selesai", value: "true"}}
+	tv.query.sortProp, tv.query.sortDesc = "Nama", true
+	a.requery(tv)
+	want := `POST /data_sources/ds1/query {"filter":{"and":[{"property":"Status","status":{"equals":"Done"}},{"checkbox":{"equals":true},"property":"Selesai"}]},"page_size":100,"sorts":[{"direction":"descending","property":"Nama"}]}`
+	if !waitSent(rec, want) {
+		t.Errorf("sent:\n%s", rec.all())
+	}
+	tv.query.filterOpen = true
+	tester.Frame()
+	tester.Advance(time.Second)
+	snapshot(t, tester, "db-filter")
+	if _, ok := tester.Find("Tambah filter"); !ok {
+		t.Error("no filter editor")
+	}
+}
