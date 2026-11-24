@@ -51,6 +51,8 @@ type panel struct {
 	slash slashState
 	// the + beside blocks
 	handle handleState
+	// the ••• menu of the page
+	menu pageMenu
 	// focusEditor gives the editor the keyboard on its next frame.
 	focusEditor bool
 	width       float32
@@ -100,6 +102,8 @@ type App struct {
 	viewer viewer
 	// imageOf finds a picture by its block where no session holds it: tests.
 	imageOf func(id string) ui.ImageSource
+	// library is the Pustaka page's search and order.
+	library libraryState
 	// settings is the settings dialog.
 	settings settingsView
 	// themeOpen shows the theme picker.
@@ -176,6 +180,7 @@ type settings struct {
 	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
 	Zoom         float32         `json:"zoom"`    // 1 is 100%
 	Wash         string          `json:"wash"`    // the color behind the cards
+	Trashed      []trashed       `json:"trashed"` // pages put in the trash from gotion
 	Glass        bool            `json:"glass"`   // the system's glass behind them
 	// Scroll is the first paragraph in view of each page, to come back to.
 	Scroll map[string]int `json:"scroll"`
@@ -397,6 +402,9 @@ func (a *App) regroup() {
 	}
 	a.groups, a.databases = nil, nil
 	for _, n := range a.nodes {
+		if isSpecial(n.Kind) {
+			continue
+		}
 		if n.Kind == "data_source" {
 			a.databases = append(a.databases, n)
 			continue
@@ -590,6 +598,9 @@ func (a *App) show(n *node, i int) {
 
 // load fetches what panel p shows: a page or a table.
 func (a *App) load(p *panel, n *node) {
+	if isSpecial(n.Kind) {
+		return // the app's own: nothing to fetch
+	}
 	if n.Kind == "data_source" || n.Kind == "database" {
 		a.openTable(p, n)
 		return

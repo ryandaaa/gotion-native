@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -336,7 +337,28 @@ func (a *App) onboarding(c *ui.Context) {
 func (a *App) sidebar(c *ui.Context) {
 	p := a.pal()
 	ui.Column(c).Fill().Padding(4, 8, 10, 10).Gap(2).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(6).Padding(6, 8, 6, 10).Children(func() {
+		for _, id := range []string{libraryID, trashID} {
+			n := a.special(id)
+			s := map[string]*ui.SVG{libraryID: iconLibrary, trashID: iconTrash}[id]
+			current := a.panels[a.focus] != nil && a.panels[a.focus].id == id
+			r := ui.Row(c.Key("sp"+id)).AlignItems(ui.Center).Gap(10).Padding(7, 10).Radius(8).Cursor(ui.CursorPointer)
+			if current {
+				r.Background(p.Panel).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
+			} else if r.Hovered() {
+				r.Background(p.Hover)
+			}
+			r.Children(func() {
+				ui.Icon(c, s).Size(16, 16).TextColor(p.Muted)
+				ui.Text(c, n.Title).FontSize(14).Grow(1)
+				if id == trashID && len(a.set.Trashed) > 0 {
+					ui.Text(c, itoa(len(a.set.Trashed))).FontSize(12).TextColor(p.Faint)
+				}
+			})
+			if r.Clicked() {
+				a.open(n, a.focus)
+			}
+		}
+		ui.Row(c).AlignItems(ui.Center).Gap(6).Padding(10, 8, 6, 10).Children(func() {
 			ui.Text(c, "Halaman").FontSize(12).FontWeight(600).TextColor(p.Faint).Grow(1)
 			if iconButton(c, p, iconPlus, "Halaman baru di halaman ini (Ctrl+N)") {
 				if pn := a.panels[a.focus]; pn != nil {
@@ -651,6 +673,10 @@ func (a *App) panelView(c *ui.Context, i int) {
 		switch {
 		case pn == nil || pn.id == "":
 			a.empty(c)
+		case a.kindOf(pn.id) == "library":
+			a.libraryPanel(c, i)
+		case a.kindOf(pn.id) == "trash":
+			a.trashPanel(c, i)
 		case pn.table != nil:
 			a.tablePanel(c, i, pn)
 		default:
@@ -729,6 +755,7 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 			}
 			ui.Text(c, label).FontSize(12).FontWeight(500).TextColor(color).SingleLine().MaxWidth(280)
 		}
+		a.pageActions(c, i, pn)
 		if iconButton(c, p, iconWide, "Lebar penuh") {
 			a.set.FullWidth = !a.set.FullWidth
 			a.saveSettings()
@@ -833,7 +860,21 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 	// over the title when scrolled up past it.
 	box := ui.Box(c).Grow(1).MinHeight(0).Clip()
 	if files := box.DroppedFiles(); len(files) > 0 {
-		a.dropFiles(pn, files)
+		// Markdown comes in as sub-pages; anything else as attachments.
+		var md, other []string
+		for _, f := range files {
+			if ext := strings.ToLower(filepath.Ext(f)); ext == ".md" || ext == ".markdown" {
+				md = append(md, f)
+			} else {
+				other = append(other, f)
+			}
+		}
+		if len(md) > 0 {
+			a.importMarkdown(pn.id, md)
+		}
+		if len(other) > 0 {
+			a.dropFiles(pn, other)
+		}
 	}
 	box.Children(func() {
 		e := richtext.Editor(c.Key("editor-"+pn.id), pn.doc, richtext.EditorOptions{

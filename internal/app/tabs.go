@@ -21,7 +21,7 @@ func (a *App) tabIndex(i int, p *panel) int {
 // when it first shows.
 func (a *App) activate(i int, t *panel) {
 	a.panels[i], a.focus = t, i
-	if t.id != "" && t.doc == nil && t.table == nil && !t.opening && t.openErr == "" {
+	if t.id != "" && t.doc == nil && t.table == nil && !t.opening && t.openErr == "" && !isSpecial(a.kindOf(t.id)) {
 		if n := a.nodes[t.id]; n != nil {
 			a.load(t, n)
 		}
@@ -105,7 +105,7 @@ func (a *App) restoreTabs() {
 	}
 	for i := range 2 {
 		for _, id := range ids[i] {
-			if a.nodes[id] != nil {
+			if a.nodes[id] != nil || a.special(id) != nil {
 				a.tabs[i] = append(a.tabs[i], &panel{id: id})
 			}
 		}
@@ -166,6 +166,10 @@ func (a *App) tab(c *ui.Context, p palette, i, k int, t *panel) {
 		switch {
 		case emojiText != "":
 			emoji.View(c, emojiText, 14)
+		case kind == "library":
+			ui.Icon(c, iconLibrary).Size(14, 14).TextColor(p.Faint)
+		case kind == "trash":
+			ui.Icon(c, iconTrash).Size(14, 14).TextColor(p.Faint)
 		case kind != "page":
 			ui.Icon(c, iconTable).Size(14, 14).TextColor(p.Faint)
 		default:
@@ -202,4 +206,11 @@ func (a *App) tab(c *ui.Context, p palette, i, k int, t *panel) {
 	case tab.Clicked():
 		a.activate(i, t)
 	}
+}
+
+func (a *App) kindOf(id string) string {
+	if n := a.nodes[id]; n != nil {
+		return n.Kind
+	}
+	return ""
 }

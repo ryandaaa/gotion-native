@@ -2,8 +2,8 @@ package app
 
 import (
 	"bytes"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"image/png"
 	"os"
 	"testing"
