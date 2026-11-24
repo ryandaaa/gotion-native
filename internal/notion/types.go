@@ -262,7 +262,13 @@ func (c *Client) Tree(ctx context.Context, id string, depth int) ([]*Block, erro
 		return blocks, nil
 	}
 	for _, b := range blocks {
-		if b.HasChildren && (Nests(b.Type) || b.Type == "table") {
+		switch {
+		case b.Type == "column_list" || b.Type == "column":
+			// Containers, not levels: their blocks show at their depth.
+			if b.Children, err = c.Tree(ctx, b.ID, depth); err != nil {
+				return nil, err
+			}
+		case b.HasChildren && (Nests(b.Type) || b.Type == "table"):
 			if b.Children, err = c.Tree(ctx, b.ID, depth-1); err != nil {
 				return nil, err
 			}

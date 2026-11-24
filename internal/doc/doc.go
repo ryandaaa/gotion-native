@@ -34,6 +34,43 @@ type Shape struct {
 	// Width points at the width of the page's text, which the app keeps
 	// up to date; tables draw across it. Nil draws them TextWidth wide.
 	Width *float32
+	// Emoji returns an emoji's picture, nil to show the system's glyph.
+	Emoji func(string) ui.ImageSource
+}
+
+// iconRun is an emoji drawn as a picture where the shape gives one, a
+// decoration the app adds, never sent.
+func iconRun(e string, shape Shape) []richtext.Run {
+	if shape.Emoji != nil {
+		if img := shape.Emoji(e); img != nil {
+			return []richtext.Run{
+				{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Tag: uiTag + e,
+					Attachment: &richtext.Attachment{Image: img, Width: 18, Height: 18, Name: e}}},
+				decoration(" ", "", ui.Color{}),
+			}
+		}
+	}
+	return []richtext.Run{decoration(e+" ", "", ui.Color{})}
+}
+
+// glyph draws a page or table icon in line, in the theme's muted color.
+func glyph(kind string) richtext.Run {
+	return richtext.Run{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Tag: uiTag + kind,
+		Attachment: &richtext.Attachment{Name: kind, Width: 22, Height: 16, Draw: func(p *ui.Painter, r ui.Rect) {
+			c := p.Theme().TextMuted
+			x, y := r.X+2, r.Y+1
+			switch kind {
+			case "page":
+				p.Stroke(ui.Rect{X: x, Y: y, W: 12, H: 14}, c, 2, 1.3)
+				p.Line(x+3, y+5, x+9, y+5, 1.2, c)
+				p.Line(x+3, y+8, x+9, y+8, 1.2, c)
+				p.Line(x+3, y+11, x+7, y+11, 1.2, c)
+			default:
+				p.Stroke(ui.Rect{X: x, Y: y + 1, W: 14, H: 12}, c, 2, 1.3)
+				p.Line(x, y+5, x+14, y+5, 1.2, c)
+				p.Line(x+5, y+5, x+5, y+13, 1.2, c)
+			}
+		}}}}
 }
 
 // TextWidth is the widest images and tables draw.
@@ -83,12 +120,9 @@ type Known struct {
 // blocks it does not edit: gotion:page/<id>, gotion:db/<id>, gotion:open/<id>.
 const LinkPrefix = "gotion:"
 
-// DividerColor is the color dividers are drawn with.
-var DividerColor = ui.Hex("#D6D3D1")
-
 func divider() *richtext.Attachment {
 	return &richtext.Attachment{Name: "divider", Width: 2000, Height: 14, Draw: func(p *ui.Painter, r ui.Rect) {
-		p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H/2, W: r.W, H: 1}, DividerColor, 0)
+		p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H/2, W: r.W, H: 1}, p.Theme().TextMuted.Alpha(0.35), 0)
 	}}
 }
 
@@ -108,7 +142,7 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 		if title == "" {
 			title = "Tanpa judul"
 		}
-		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{{Text: "📄 "}}, link("page/", title)...)}
+		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("page")}, link("page/", title)...)}
 	case "image":
 		if img := shape.Images[b.ID]; img != nil {
 			w, h := ui.ImageSize(img)
@@ -131,7 +165,7 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 		if title == "" || title == "-" {
 			title = "Database tanpa judul"
 		}
-		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{{Text: "▦ "}}, link("db/", title)...)}
+		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("table")}, link("db/", title)...)}
 	}
 	label := "Block " + strings.ReplaceAll(b.Type, "_", " ") + " — buka di Notion ↗"
 	runs := link("open/", label)
@@ -228,6 +262,13 @@ func Build(pageID string, blocks []*notion.Block, shape Shape) (richtext.Text, m
 			if b.InTrash {
 				continue
 			}
+			if b.Type == "column_list" || b.Type == "column" {
+				// Columns side by side show one after another: the editor
+				// lays out one column. They are kept, never deleted for it.
+				known[b.ID] = &Known{NotionID: b.ID, Type: b.Type, Parent: parent, HasChildren: true, Hidden: true, ReadOnly: true, Hash: "ro"}
+				walk(b.ID, b.Children, depth)
+				continue
+			}
 			if !Editable(b.Type) {
 				p := b.Text()
 				if b.Type == "child_page" || b.Type == "child_database" {
@@ -251,11 +292,11 @@ func Build(pageID string, blocks []*notion.Block, shape Shape) (richtext.Text, m
 				}
 				lines[0] = append([]richtext.Run{decoration(arrow, LinkPrefix+"toggle/"+b.ID, ui.Hex("#78716C"))}, lines[0]...)
 			case "callout":
-				icon := "💡 "
+				icon := "💡"
 				if p.Icon != nil && p.Icon.Emoji != "" {
-					icon = p.Icon.Emoji + " "
+					icon = p.Icon.Emoji
 				}
-				lines[0] = append([]richtext.Run{decoration(icon, "", ui.Color{})}, lines[0]...)
+				lines[0] = append(iconRun(icon, shape), lines[0]...)
 			}
 			for i, runs := range lines {
 				st := style

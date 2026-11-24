@@ -9,8 +9,11 @@ import (
 	"gotion/internal/notion"
 )
 
-// TableColors are the colors tables draw with.
-var TableColors = struct{ Line, Head, Text ui.Color }{ui.Hex("#E7E5E4"), ui.Hex("#F5F5F4"), ui.Hex("#1C1917")}
+// tableColors are the colors a table draws with, from the theme it is
+// drawn in, so that it follows light and dark.
+func tableColors(t *ui.Theme) (line, head, text ui.Color) {
+	return t.TextMuted.Alpha(0.3), t.TextMuted.Alpha(0.1), t.Text
+}
 
 const (
 	rowHeight = 32
@@ -45,26 +48,27 @@ func tableAttachment(b *notion.Block, width *float32) *richtext.Attachment {
 		if width != nil && *width > 0 {
 			w = *width
 		}
+		line, headBg, textColor := tableColors(p.Theme())
 		cw := w / float32(cols)
 		for i, row := range rows {
 			y := r.Y + float32(i*rowHeight)
 			if i == 0 && header {
-				p.Fill(ui.Rect{X: r.X, Y: y, W: w, H: rowHeight}, TableColors.Head, 0)
+				p.Fill(ui.Rect{X: r.X, Y: y, W: w, H: rowHeight}, headBg, 0)
 			}
 			for j := 0; j < cols; j++ {
 				text := ""
 				if j < len(row) {
 					text = row[j]
 				}
-				p.Text(r.X+float32(j)*cw+8, y+(rowHeight-cellFont)/2, fit(text, cw-16, cellFont), cellFont, TableColors.Text)
+				p.Text(r.X+float32(j)*cw+8, y+(rowHeight-cellFont)/2, fit(text, cw-16, cellFont), cellFont, textColor)
 			}
 		}
 		for i := 0; i <= len(rows); i++ {
-			p.Fill(ui.Rect{X: r.X, Y: r.Y + float32(i*rowHeight), W: w, H: 1}, TableColors.Line, 0)
+			p.Fill(ui.Rect{X: r.X, Y: r.Y + float32(i*rowHeight), W: w, H: 1}, line, 0)
 		}
 		for j := 0; j <= cols; j++ {
 			x := min(r.X+float32(j)*cw, r.X+w-1)
-			p.Fill(ui.Rect{X: x, Y: r.Y, W: 1, H: h}, TableColors.Line, 0)
+			p.Fill(ui.Rect{X: x, Y: r.Y, W: 1, H: h}, line, 0)
 		}
 	}}
 }

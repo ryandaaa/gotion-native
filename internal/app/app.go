@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo/ui/richtext"
 
 	"gotion/internal/doc"
+	"gotion/internal/emoji"
 	"gotion/internal/notion"
 	"gotion/internal/syncer"
 )
@@ -51,6 +52,11 @@ type panel struct {
 	width float32
 	// textWidth is the width of the page's text, which tables draw across.
 	textWidth float32
+	// readOnly holds what each read-only paragraph holds (guardReadOnly).
+	readOnly map[string]string
+	// restore is the paragraph to scroll to once the editor shows, -1 none.
+	restore int
+	warned  bool
 }
 
 // App is the state of the window.
@@ -156,6 +162,10 @@ type settings struct {
 	FullWidth    bool            `json:"fullWidth"`
 	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
 	Zoom         float32         `json:"zoom"`    // 1 is 100%
+	// Scroll is the first paragraph in view of each page, to come back to.
+	Scroll map[string]int `json:"scroll"`
+	// Views is how each database shows: "table" or "cards".
+	Views map[string]string `json:"views"`
 }
 
 func loadSettings() settings {
@@ -171,6 +181,12 @@ func loadSettings() settings {
 	}
 	if s.Toggles == nil {
 		s.Toggles = map[string]bool{}
+	}
+	if s.Scroll == nil {
+		s.Scroll = map[string]int{}
+	}
+	if s.Views == nil {
+		s.Views = map[string]string{}
 	}
 	if s.SidebarWidth < 200 {
 		s.SidebarWidth = 270
@@ -618,7 +634,13 @@ func (a *App) shape(p *panel) doc.Shape {
 	for k, v := range a.set.Toggles {
 		open[k] = v
 	}
-	return doc.Shape{OpenToggles: open, Width: &p.textWidth}
+	return doc.Shape{OpenToggles: open, Width: &p.textWidth, Emoji: func(e string) ui.ImageSource {
+		// Builds run in the background: fetching here is fine.
+		if s := emoji.Load(context.Background(), e); s != nil {
+			return s
+		}
+		return nil
+	}}
 }
 
 func (a *App) openPage(p *panel, id string) {
@@ -650,6 +672,7 @@ func (a *App) openPage(p *panel, id string) {
 					if p.session == s {
 						d.SetText(text)
 						p.extras = extras
+						a.guardReadOnly(p)
 						a.registerChildren(id, extras)
 						if s.Page != nil {
 							if n := a.nodes[id]; n != nil {
@@ -661,6 +684,11 @@ func (a *App) openPage(p *panel, id string) {
 			}
 			s.OnError = func(msg string) { a.win.Update(func() { a.toast(msg) }) }
 			p.session, p.doc, p.extras = s, d, extras
+			a.guardReadOnly(p)
+			p.restore = -1
+			if i, ok := a.set.Scroll[id]; ok {
+				p.restore = i
+			}
 			if s.Page != nil {
 				title := s.Page.Title()
 				p.title, p.titleSent = title, title

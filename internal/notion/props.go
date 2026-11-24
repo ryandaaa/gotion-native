@@ -156,3 +156,44 @@ func shortDate(s string) string {
 	}
 	return s
 }
+
+// Chip is a value shown as a colored tag: an option of a select, status or
+// multi-select.
+type Chip struct {
+	Name, Color string
+}
+
+// Chips returns a property's values as tags, nil for properties that are
+// not select, status or multi-select.
+func Chips(raw json.RawMessage) []Chip {
+	var v struct {
+		Type        string  `json:"type"`
+		Select      *named  `json:"select"`
+		Status      *named  `json:"status"`
+		MultiSelect []named `json:"multi_select"`
+	}
+	if json.Unmarshal(raw, &v) != nil {
+		return nil
+	}
+	var out []Chip
+	switch v.Type {
+	case "select":
+		if v.Select != nil {
+			out = append(out, Chip{v.Select.Name, v.Select.Color})
+		}
+	case "status":
+		if v.Status != nil {
+			out = append(out, Chip{v.Status.Name, v.Status.Color})
+		}
+	case "multi_select":
+		for _, n := range v.MultiSelect {
+			out = append(out, Chip{n.Name, n.Color})
+		}
+	default:
+		return nil
+	}
+	if out == nil {
+		out = []Chip{}
+	}
+	return out
+}

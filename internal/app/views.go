@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
 
+	"gotion/internal/emoji"
 	"gotion/internal/syncer"
 )
 
@@ -22,6 +23,9 @@ func (a *App) View(c *ui.Context) {
 	a.dark = a.set.Theme == "dark" || a.set.Theme != "light" && sysDark
 	p := a.pal()
 	c.SetTheme(theme(p, a.dark))
+	if a.set.Zoom <= 0 {
+		a.set.Zoom = 1
+	}
 	c.SetZoom(a.set.Zoom)
 	for _, m := range a.toasts {
 		c.Toast(m)
@@ -202,7 +206,7 @@ func (a *App) breadcrumbs(c *ui.Context) {
 			}
 			b.Children(func() {
 				if n.Emoji != "" {
-					ui.Text(c, n.Emoji).FontSize(13)
+					emoji.View(c, n.Emoji, 15)
 				}
 				t := ui.Text(c, n.Title).FontSize(13).SingleLine().MaxWidth(180)
 				if last {
@@ -411,7 +415,7 @@ func (a *App) item(c *ui.Context, n *node, depth int) {
 		}
 		switch {
 		case n.Emoji != "":
-			ui.Text(c, n.Emoji).FontSize(13)
+			emoji.View(c, n.Emoji, 15)
 		case n.Kind != "page":
 			ui.Icon(c, iconTable).Size(14, 14).TextColor(p.Faint)
 		default:
@@ -542,9 +546,6 @@ func (a *App) panelView(c *ui.Context, i int) {
 	pn := a.panels[i]
 	card := ui.Column(c.Key(fmt.Sprint("panel", i))).Fill().MinWidth(0).Background(p.Panel).Radius(12).Clip().
 		Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.08))
-	if a.panels[1] != nil && a.focus == i {
-		card.Border(1, p.EditLine)
-	}
 	if card.PressedInside() {
 		a.focus = i
 	}
@@ -679,7 +680,7 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	col.Children(func() {
 		ui.Row(c).PaddingX(pad).AlignItems(ui.Center).Gap(10).Children(func() {
 			if n != nil && n.Emoji != "" {
-				ui.Text(c, n.Emoji).FontSize(30)
+				emoji.View(c, n.Emoji, 34)
 			}
 			in := ui.TextInput(c.Key("title"+pn.id), &pn.title).Placeholder("Tanpa judul").FontSize(30).FontWeight(700).
 				Grow(1).Background(ui.Color{}).Border(0, ui.Color{}).Padding(0).FocusRing(false).Label("Judul halaman")
@@ -729,23 +730,34 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 	// over the title when scrolled up past it.
 	ui.Box(c).Grow(1).MinHeight(0).Clip().Children(func() {
 		e := richtext.Editor(c.Key("editor-"+pn.id), pn.doc, richtext.EditorOptions{
-			Theme:       &richtext.Theme{Padding: [2]float32{pad, 12}},
+			Theme:       a.prose(pad),
 			Label:       "Isi halaman",
 			Placeholder: "Ketik / untuk perintah…",
 			OnLink:      a.followLink(i),
 			OnKey:       func(k ui.Key, m ui.Modifiers) bool { return a.slashKey(pn, k, m) },
-			Font:        ui.Font{Family: "Inter", Size: 15},
-			Space:       func(int) float32 { return 6 },
-		}).LineHeight(1.5).Fill().Background(p.Panel).Border(0, p.Panel).Radius(0)
+			Font:        ui.Font{Family: "Inter", Size: 16, LineHeight: 1.7},
+			Space:       func(int) float32 { return 3 },
+		}).Fill().Background(p.Panel).Border(0, p.Panel).Radius(0)
 		if e.Focused() {
 			a.focus = i
 		}
 		if e.Changed() {
-			if pn.session != nil {
-				pn.session.Edited(pn.doc.Text())
+			if brokeReadOnly(pn.doc, pn.readOnly) {
+				// Sub-pages, images and tables are not edited here: take
+				// the edit back.
+				pn.doc.Undo()
+				if !pn.warned {
+					pn.warned = true
+					a.toast("Baris ini tidak bisa diedit di gotion. Tekan Enter di ujungnya untuk menulis di bawahnya.")
+				}
+			} else {
+				if pn.session != nil {
+					pn.session.Edited(pn.doc.Text())
+				}
+				a.slashUpdate(pn)
 			}
-			a.slashUpdate(pn)
 		}
+		a.trackScroll(pn)
 		a.slashView(c, pn)
 		if e.Focused() && !pn.slash.open {
 			a.formatBar(c, pn)
@@ -770,4 +782,55 @@ func padding(width float32, full bool) float32 {
 		pad = max(16, (width-minText)/2)
 	}
 	return pad
+}
+
+// trackScroll puts the page back where it was read last, once its editor
+// shows, and remembers where it is read now.
+func (a *App) trackScroll(pn *panel) {
+	vis := pn.doc.VisibleParagraphs()
+	if vis == nil {
+		return // not shown yet
+	}
+	if pn.restore >= 0 {
+		pn.doc.ScrollToParagraph(pn.restore, ui.ScrollStart)
+		pn.restore = -1
+		return
+	}
+	if a.set.Scroll == nil {
+		a.set.Scroll = map[string]int{}
+	}
+	for _, b := range vis {
+		if b.Top+b.Height > 0 {
+			a.set.Scroll[pn.id] = b.Index
+			return
+		}
+	}
+}
+
+// prose is how page text looks: room to breathe between paragraphs and
+// around headings, links in the text's color, quiet markers and code.
+func (a *App) prose(pad float32) *richtext.Theme {
+	p := a.pal()
+	return &richtext.Theme{
+		Padding:             [2]float32{pad, 16},
+		Link:                p.Text,
+		Muted:               p.Faint,
+		Marker:              p.Faint,
+		Checkbox:            p.Accent,
+		QuoteBar:            p.Faint.Alpha(0.6),
+		QuoteText:           p.Text,
+		QuoteBarWidth:       2.5,
+		ParagraphSpacing:    0.55,
+		Indent:              1.6,
+		CodeBackground:      p.Hover,
+		Code:                p.Warn,
+		CodeBlockBackground: p.Sidebar,
+		CodeBlockRadius:     0.4,
+		CodeBlockPadding:    [2]float32{1, 0.8},
+		Headings: [6]richtext.HeadingStyle{
+			{Size: 1.875, Weight: 700, Top: 1.0, Bottom: 0.45, LineHeight: 1.25},
+			{Size: 1.5, Weight: 650, Top: 1.05, Bottom: 0.4, LineHeight: 1.3},
+			{Size: 1.25, Weight: 600, Top: 0.95, Bottom: 0.35, LineHeight: 1.35},
+		},
+	}
 }

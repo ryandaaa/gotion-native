@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"gotion/internal/emoji"
 )
 
 // switcherState is the quick switcher, Ctrl+K.
@@ -102,7 +104,7 @@ func (a *App) switcherView(c *ui.Context) {
 					row.Children(func() {
 						switch {
 						case n.Emoji != "":
-							ui.Text(c, n.Emoji).FontSize(14)
+							emoji.View(c, n.Emoji, 16)
 						case n.Kind != "page":
 							ui.Icon(c, iconTable).Size(15, 15).TextColor(p.Faint)
 						default:

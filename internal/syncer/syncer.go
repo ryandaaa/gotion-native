@@ -527,3 +527,17 @@ func (s *Session) pull(ctx context.Context, force bool) {
 		s.OnRemote(text, extras)
 	}
 }
+
+// ReadOnly returns the IDs of the paragraphs that show blocks the editor
+// does not edit: sub-pages, images, tables and the like.
+func (s *Session) ReadOnly() map[string]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]bool{}
+	for id, k := range s.known {
+		if k.ReadOnly && !k.Hidden {
+			out[id] = true
+		}
+	}
+	return out
+}

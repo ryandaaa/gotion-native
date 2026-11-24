@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"gotion/internal/app"
+	"gotion/internal/emoji"
 	"gotion/internal/syncer"
 )
 
@@ -18,6 +19,7 @@ func main() {
 	app.RegisterFonts()
 	if dir, err := os.UserConfigDir(); err == nil {
 		syncer.CacheDir = filepath.Join(dir, "gotion", "cache")
+		emoji.Dir = filepath.Join(dir, "gotion", "emoji")
 	}
 	a := app.New()
 	mygo.App.WhenReady(func() {
@@ -41,6 +43,7 @@ func main() {
 			TitleBarStyle: mygo.TitleBarHidden,
 			Content:       ui.View(a.View),
 		})
+		emoji.OnLoad = w.Invalidate
 		a.Attach(w)
 	})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.Close() })
