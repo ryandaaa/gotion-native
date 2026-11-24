@@ -53,6 +53,8 @@ type panel struct {
 	handle handleState
 	// the ••• menu of the page
 	menu pageMenu
+	// the comments beside it
+	comments commentsState
 	// focusEditor gives the editor the keyboard on its next frame.
 	focusEditor bool
 	width       float32

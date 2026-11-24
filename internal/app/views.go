@@ -755,6 +755,9 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 			}
 			ui.Text(c, label).FontSize(12).FontWeight(500).TextColor(color).SingleLine().MaxWidth(280)
 		}
+		if b := iconButton(c, p, iconComment, "Komentar"); b {
+			a.toggleComments(pn)
+		}
 		a.pageActions(c, i, pn)
 		if iconButton(c, p, iconWide, "Lebar penuh") {
 			a.set.FullWidth = !a.set.FullWidth
@@ -796,7 +799,18 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	}
 	pad := padding(width, a.set.FullWidth)
 	pn.textWidth = width - 2*pad
-	col := ui.Column(c).Grow(1).MinHeight(0).Padding(24, 0, 0, 0).Gap(10)
+	// The page, and its comments beside it when open.
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		a.pageBody(c, i, pn, n, width, pad)
+		if pn.comments.open {
+			a.commentsDrawer(c, pn)
+		}
+	})
+}
+
+// pageBody is the page's title and text.
+func (a *App) pageBody(c *ui.Context, i int, pn *panel, n *node, width, pad float32) {
+	col := ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).Padding(24, 0, 0, 0).Gap(10)
 	if b := col.LayoutBounds(); b.W > 0 {
 		pn.width, a.widths[i] = b.W, b.W
 		// Tables draw with the width this frame laid the text out for
