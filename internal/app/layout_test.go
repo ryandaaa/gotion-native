@@ -42,19 +42,27 @@ const tablePage = `[
  {"object":"block","id":"p2","type":"paragraph","paragraph":{"rich_text":[{"type":"text","plain_text":"Isi setelah tabel.","annotations":{"color":"default"}}]}}
 ]`
 
-func tableApp(t *testing.T) (*App, richtext.Text) {
+// tablePanel is a panel showing the table page, its tables drawn across
+// its own text width.
+func tablePanel(t *testing.T, id, title string) *panel {
 	var blocks []*notion.Block
 	if err := json.Unmarshal([]byte(tablePage), &blocks); err != nil {
 		t.Fatal(err)
 	}
-	text, _, _ := doc.Build("ppsi", blocks, doc.Shape{})
+	p := &panel{id: id, title: title}
+	text, _, _ := doc.Build(id, blocks, doc.Shape{Width: &p.textWidth})
+	p.doc = richtext.NewDocument(text)
+	return p
+}
+
+func tableApp(t *testing.T) *App {
 	a := &App{client: notion.New("x"), bot: &notion.User{}, panels: [2]*panel{{}, nil}}
 	a.set = settings{Theme: "light", SidebarWidth: 270, Open: map[string]bool{}, Closed: map[string]bool{}, Toggles: map[string]bool{}}
 	a.nodes = map[string]*node{"ppsi": {ID: "ppsi", Title: "PPSI", Kind: "page"}, "two": {ID: "two", Title: "Dua", Kind: "page"}}
 	a.regroup()
-	a.panels[0] = &panel{id: "ppsi", doc: richtext.NewDocument(text), title: "PPSI"}
+	a.panels[0] = tablePanel(t, "ppsi", "PPSI")
 	RegisterFonts()
-	return a, text
+	return a
 }
 
 func snapshot(t *testing.T, tester *ui.Tester, name string) []byte {
@@ -66,52 +74,67 @@ func snapshot(t *testing.T, tester *ui.Tester, name string) []byte {
 	return b.Bytes()
 }
 
-// TestSplitSettlesAtOnce: after opening or closing a second panel the
-// layout is stable and no panel's text is squeezed. The Tester settles a
-// frame fully, so it cannot see the one stale frame a real window showed
-// until the next event; that is checked by hand.
+// TestSplitSettlesAtOnce: after opening or closing a second panel, at
+// most one frame is drawn with the old widths; the app asks for the next
+// one itself, and from then on every frame draws the same. Before, a
+// stale frame stayed on screen until the next mouse move.
 func TestSplitSettlesAtOnce(t *testing.T) {
-	a, text := tableApp(t)
+	a := tableApp(t)
 	tester := ui.NewTester(a.View, 1600, 900)
 	tester.Frame()
 	if a.widths[0] == 0 {
 		t.Fatal("the panel's width was not measured")
 	}
-	a.panels[1] = &panel{id: "two", doc: richtext.NewDocument(text), title: "Dua"}
-	a.guessSplit()
-	tester.Frame()
-	first := snapshot(t, tester, "split-first")
-	if tester.FramePending() {
-		t.Error("a frame is still pending after the split settled")
-	}
-	tester.Frame()
-	if !bytes.Equal(first, snapshot(t, tester, "split-second")) {
-		t.Error("the split drew differently on the next frame: it flickers")
-	}
-	for i, w := range a.widths {
-		if w-2*padding(w, false) < minText {
-			t.Errorf("panel %d: text %v wide", i, w-2*padding(w, false))
+	settles := func(what string) {
+		t.Helper()
+		tester.Frame() // may draw with the widths of before
+		tester.Frame() // the frame it asked for
+		settled := snapshot(t, tester, what)
+		for j := 0; j < 3; j++ {
+			tester.Frame()
+			if !bytes.Equal(settled, snapshot(t, tester, what+"-again")) {
+				t.Fatalf("%s: frame %d drew differently: it never settles", what, j)
+			}
+		}
+		for i, p := range a.panels {
+			if p != nil && p.width > 0 && p.textWidth < min(minText, p.width-32) {
+				t.Errorf("%s: panel %d text %v wide", what, i, p.textWidth)
+			}
 		}
 	}
-	// Closing it settles the same way.
+	a.panels[1] = tablePanel(t, "two", "Dua")
+	a.guessSplit()
+	settles("split")
 	a.closeSecond()
-	tester.Frame()
-	closed := snapshot(t, tester, "split-closed")
-	tester.Frame()
-	if !bytes.Equal(closed, snapshot(t, tester, "split-closed-2")) {
-		t.Error("closing the split flickers")
-	}
+	settles("split-closed")
 }
 
 // TestScrolledTableStaysInEditor renders a table in a narrow, scrolled
 // editor; SHOT=<dir> saves it to look at.
 func TestScrolledTableStaysInEditor(t *testing.T) {
-	a, text := tableApp(t)
-	a.panels[1] = &panel{id: "two", doc: richtext.NewDocument(text), title: "Dua"}
+	a := tableApp(t)
+	a.panels[1] = tablePanel(t, "two", "Dua")
 	tester := ui.NewTester(a.View, 1280, 380)
 	tester.Frame()
 	a.panels[0].doc.ScrollBy(120)
 	a.panels[1].doc.ScrollBy(120)
 	tester.Frame()
 	snapshot(t, tester, "table-scrolled")
+}
+
+// TestTableFitsANarrowPanel: in a panel narrower than a table asks for, the
+// table is drawn across the panel's text, not shrunk.
+func TestTableFitsANarrowPanel(t *testing.T) {
+	a := tableApp(t)
+	a.set.SplitSize = 900
+	a.panels[1] = tablePanel(t, "two", "Dua")
+	tester := ui.NewTester(a.View, 1280, 520)
+	tester.Frame()
+	tester.Frame()
+	snapshot(t, tester, "table-narrow")
+	for i, p := range a.panels {
+		if p.textWidth <= 0 || p.textWidth > p.width {
+			t.Errorf("panel %d: text %v wide in a panel %v wide", i, p.textWidth, p.width)
+		}
+	}
 }

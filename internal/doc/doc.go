@@ -31,6 +31,9 @@ const (
 type Shape struct {
 	OpenToggles map[string]bool
 	Images      map[string]ui.ImageSource
+	// Width points at the width of the page's text, which the app keeps
+	// up to date; tables draw across it. Nil draws them TextWidth wide.
+	Width *float32
 }
 
 // TextWidth is the widest images and tables draw.
@@ -121,7 +124,7 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 	case "table":
 		if len(b.Children) > 0 {
 			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
-				Attributes: richtext.Attributes{Attachment: tableAttachment(b)}}}}
+				Attributes: richtext.Attributes{Attachment: tableAttachment(b, shape.Width)}}}}
 		}
 	case "child_database":
 		title := strings.TrimSpace(p.Title)

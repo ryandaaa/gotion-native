@@ -17,8 +17,14 @@ const (
 	cellFont  = 13
 )
 
-// tableAttachment draws a table block, read-only, as a grid.
-func tableAttachment(b *notion.Block) *richtext.Attachment {
+// tableAttachment draws a table block, read-only, as a grid as wide as
+// the page's text (*width), its rows 32 DIPs and its type 13 at any width:
+// a cell too narrow for its text ends in "…".
+//
+// The box the editor lays out is one DIP wide, so the editor never shrinks
+// it, and the grid is drawn across the line beside it: a table is always
+// alone in its paragraph, and the editor clips what it draws.
+func tableAttachment(b *notion.Block, width *float32) *richtext.Attachment {
 	var rows [][]string
 	cols := 0
 	for _, r := range b.Children {
@@ -32,39 +38,33 @@ func tableAttachment(b *notion.Block) *richtext.Attachment {
 	if cols == 0 {
 		cols = 1
 	}
-	var head struct {
-		HasColumnHeader bool `json:"has_column_header"`
-	}
-	head.HasColumnHeader = strings.Contains(string(b.Payload), `"has_column_header":true`)
-	w := float32(TextWidth)
+	header := strings.Contains(string(b.Payload), `"has_column_header":true`)
 	h := float32(len(rows)*rowHeight) + 1
-	return &richtext.Attachment{Name: "table", Width: w, Height: h, Draw: func(p *ui.Painter, r ui.Rect) {
-		// A narrow editor shrinks the box, height and all: draw to the box
-		// it got, not the one asked for.
-		scale := r.W / w
-		rh := (r.H - 1) / float32(max(1, len(rows)))
-		font := max(9, cellFont*scale)
-		cw := r.W / float32(cols)
+	return &richtext.Attachment{Name: "table", Width: 1, Height: h, Draw: func(p *ui.Painter, r ui.Rect) {
+		w := float32(TextWidth)
+		if width != nil && *width > 0 {
+			w = *width
+		}
+		cw := w / float32(cols)
 		for i, row := range rows {
-			y := r.Y + float32(i)*rh
-			if i == 0 && head.HasColumnHeader {
-				p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: rh}, TableColors.Head, 0)
+			y := r.Y + float32(i*rowHeight)
+			if i == 0 && header {
+				p.Fill(ui.Rect{X: r.X, Y: y, W: w, H: rowHeight}, TableColors.Head, 0)
 			}
 			for j := 0; j < cols; j++ {
 				text := ""
 				if j < len(row) {
 					text = row[j]
 				}
-				p.Text(r.X+float32(j)*cw+8*scale, y+(rh-font)/2, fit(text, cw-16*scale, font), font, TableColors.Text)
+				p.Text(r.X+float32(j)*cw+8, y+(rowHeight-cellFont)/2, fit(text, cw-16, cellFont), cellFont, TableColors.Text)
 			}
 		}
 		for i := 0; i <= len(rows); i++ {
-			y := r.Y + float32(i)*rh
-			p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: 1}, TableColors.Line, 0)
+			p.Fill(ui.Rect{X: r.X, Y: r.Y + float32(i*rowHeight), W: w, H: 1}, TableColors.Line, 0)
 		}
 		for j := 0; j <= cols; j++ {
-			x := min(r.X+float32(j)*cw, r.X+r.W-1)
-			p.Fill(ui.Rect{X: x, Y: r.Y, W: 1, H: r.H}, TableColors.Line, 0)
+			x := min(r.X+float32(j)*cw, r.X+w-1)
+			p.Fill(ui.Rect{X: x, Y: r.Y, W: 1, H: h}, TableColors.Line, 0)
 		}
 	}}
 }
@@ -74,8 +74,11 @@ func fit(s string, w, font float32) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	n := int(w / (font * 0.55))
 	r := []rune(s)
-	if len(r) > n && n > 1 {
-		return string(r[:n-1]) + "…"
+	switch {
+	case len(r) <= n:
+		return s
+	case n <= 1:
+		return "" // not even one letter and "…" fit
 	}
-	return s
+	return string(r[:n-1]) + "…"
 }

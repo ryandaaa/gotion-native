@@ -479,7 +479,10 @@ func (a *App) main(c *ui.Context) {
 			a.panelView(c, 0)
 			return
 		}
-		if a.set.SplitSize < 300 {
+		// Neither panel narrower than minPanel, however the divider moves.
+		if total := a.widths[0] + a.widths[1]; total >= 2*minPanel {
+			a.set.SplitSize = min(max(a.set.SplitSize, minPanel), total-minPanel)
+		} else if a.set.SplitSize < minPanel {
 			a.set.SplitSize = 640
 		}
 		s := ui.Split(c, &a.set.SplitSize, func() { a.panelView(c, 0) }, func() { a.panelView(c, 1) }).Fill()
@@ -617,13 +620,16 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 		width = a.widths[i]
 	}
 	pad := padding(width, a.set.FullWidth)
+	pn.textWidth = width - 2*pad
 	col := ui.Column(c).Grow(1).MinHeight(0).Padding(24, 0, 0, 0).Gap(10)
 	if b := col.LayoutBounds(); b.W > 0 {
 		pn.width, a.widths[i] = b.W, b.W
-		if padding(b.W, a.set.FullWidth) != pad {
+		// Tables draw with the width this frame laid the text out for
+		// (textWidth above); a different one is for the next frame.
+		if d := b.W - width; d > 0.5 || d < -0.5 {
 			// Drawn with a stale width: draw again now, not at the next
 			// mouse move.
-			c.After(0)
+			c.AnimationFrame()
 		}
 	}
 	col.Children(func() {
@@ -702,6 +708,9 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 		}
 	})
 }
+
+// minPanel is the narrowest a panel of a split gets.
+const minPanel = 360
 
 // minText is the narrowest the text of a page gets, however stale a width.
 const minText = 320

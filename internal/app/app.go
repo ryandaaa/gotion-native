@@ -49,6 +49,8 @@ type panel struct {
 	// the slash menu
 	slash slashState
 	width float32
+	// textWidth is the width of the page's text, which tables draw across.
+	textWidth float32
 }
 
 // App is the state of the window.
@@ -597,7 +599,7 @@ func (a *App) followLink(i int) func(url string) {
 				a.set.Toggles[id] = !a.set.Toggles[id]
 				a.saveSettings()
 				if p != nil && p.session != nil {
-					p.session.Reshape(a.shape())
+					p.session.Reshape(a.shape(p))
 				}
 			default:
 				go mygo.Shell.OpenExternal("https://www.notion.so/" + strings.ReplaceAll(id, "-", ""))
@@ -607,12 +609,12 @@ func (a *App) followLink(i int) func(url string) {
 }
 
 // shape is how pages show: which toggles are open.
-func (a *App) shape() doc.Shape {
+func (a *App) shape(p *panel) doc.Shape {
 	open := map[string]bool{}
 	for k, v := range a.set.Toggles {
 		open[k] = v
 	}
-	return doc.Shape{OpenToggles: open}
+	return doc.Shape{OpenToggles: open, Width: &p.textWidth}
 }
 
 func (a *App) openPage(p *panel, id string) {
@@ -621,7 +623,7 @@ func (a *App) openPage(p *panel, id string) {
 	if a.bot != nil {
 		bot = a.bot.ID
 	}
-	shape := a.shape()
+	shape := a.shape(p)
 	go func() {
 		s, text, extras, err := syncer.Open(context.Background(), client, bot, id, shape)
 		a.win.Update(func() {
