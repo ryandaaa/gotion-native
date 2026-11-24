@@ -23,7 +23,7 @@ import (
 // OAuthURL is the gotion OAuth Worker (worker/), set at build time with
 // -ldflags "-X gotion/internal/app.OAuthURL=https://…" or by
 // GOTION_OAUTH_URL. Without one, only the integration token signs in.
-var OAuthURL = "https://gotion-oauth.ryanda-valents3649.workers.dev"
+var OAuthURL = "https://gotion.ryanda.my.id"
 
 func oauthURL() string {
 	if u := os.Getenv("GOTION_OAUTH_URL"); u != "" {

@@ -10,8 +10,8 @@ them to gotion on the user's own machine (`127.0.0.1` only).
    make a new integration of type **Public**. Fill in the required fields
    (name, website, privacy policy and terms URLs can be your own pages).
    Under *OAuth Domain & URIs* add the redirect URI
-   `https://gotion-oauth.<your-subdomain>.workers.dev/callback`
-   (you get the exact host after the first deploy; add it then).
+   `https://gotion.ryanda.my.id/callback` (the Worker's custom domain,
+   set in `wrangler.toml`; a zone of the same Cloudflare account).
    Copy the **OAuth client ID** and **client secret**.
 2. **Deploy.**
    ```sh
@@ -23,9 +23,9 @@ them to gotion on the user's own machine (`127.0.0.1` only).
    ```
 3. **Point gotion at it.**
    ```sh
-   GOTION_OAUTH_URL=https://gotion-oauth.<your-subdomain>.workers.dev go run .
-   # or bake it in:
-   go build -ldflags "-X gotion/internal/app.OAuthURL=https://gotion-oauth.<…>.workers.dev" .
+   # The app uses https://gotion.ryanda.my.id by default; another Worker:
+   GOTION_OAUTH_URL=https://auth.example.com go run .
+   go build -ldflags "-X gotion/internal/app.OAuthURL=https://auth.example.com" .
    ```
 
 ## Endpoints
