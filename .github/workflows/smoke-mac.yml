@@ -1,0 +1,90 @@
+# Tries a release's macOS build on a real Mac, for those without one:
+# installs it from the .dmg as a person would, opens it, and keeps a
+# picture of its first screen and its log. Signing in to Notion is not
+# tried: that needs a person.
+#
+#   gh workflow run smoke-mac.yml -f tag=v0.1.0
+name: Smoke test (macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to try, e.g. v0.1.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.arch }}
+    runs-on: macos-latest # Apple silicon; the Intel build runs under Rosetta
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Rosetta, for the Intel build
+        if: matrix.arch == 'amd64'
+        run: softwareupdate --install-rosetta --agree-to-license || true
+
+      - name: Download the .dmg
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p "*-${{ matrix.arch }}.dmg" -D dl
+          ls -la dl
+
+      - name: Install it as a person would
+        run: |
+          dmg=$(ls dl/*.dmg)
+          hdiutil attach "$dmg" -nobrowse -mountpoint /Volumes/gotion
+          ls -la /Volumes/gotion
+          cp -R /Volumes/gotion/gotion.app /Applications/
+          hdiutil detach /Volumes/gotion
+
+      - name: What the app is made of
+        run: |
+          app=/Applications/gotion.app
+          plutil -lint "$app/Contents/Info.plist"
+          for k in CFBundleIdentifier CFBundleShortVersionString CFBundleExecutable LSMinimumSystemVersion; do
+            printf '%s: ' "$k"; /usr/libexec/PlistBuddy -c "Print :$k" "$app/Contents/Info.plist" || true
+          done
+          want="${TAG#v}"
+          got=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist")
+          [ "$got" = "$want" ] || { echo "::error::version $got, the tag says $want"; exit 1; }
+          file "$app/Contents/MacOS/gotion"
+          lipo -archs "$app/Contents/MacOS/gotion" | grep -qw "$( [ '${{ matrix.arch }}' = amd64 ] && echo x86_64 || echo arm64 )" \
+            || { echo "::error::the binary is not ${{ matrix.arch }}"; exit 1; }
+          echo "--- signature (ad-hoc is expected, not notarized yet)"
+          codesign -dv --verbose=2 "$app" 2>&1 || true
+          codesign --verify --deep --strict "$app" && echo "signature: valid" || echo "::warning::signature does not verify"
+          echo "--- Gatekeeper (a rejection is expected without notarization)"
+          spctl -a -vv "$app" 2>&1 || true
+
+      - name: Open it, and look at its first screen
+        run: |
+          mkdir -p out
+          /Applications/gotion.app/Contents/MacOS/gotion > out/log.txt 2>&1 &
+          pid=$!
+          sleep 15
+          screencapture -x out/screen.png || true
+          if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"; code=$?
+            echo "::error::gotion quit by itself (exit $code)"
+            cat out/log.txt
+            exit 1
+          fi
+          echo "gotion still running after 15 s"
+          ps -o pid,rss,%cpu,command -p "$pid"
+          kill "$pid"
+          cat out/log.txt
+
+      - name: Keep the picture and the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-mac-${{ matrix.arch }}
+          path: out/
