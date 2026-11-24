@@ -763,7 +763,7 @@ func (a *App) openPage(p *panel, id string) {
 			}
 			d := richtext.NewDocument(text)
 			d.IdentifyParagraphs(doc.NewID)
-			s.OnStatus = func() { a.win.Invalidate() }
+			s.OnStatus = a.invalidate
 			s.OnRemote = func(text richtext.Text, extras []doc.Extra) {
 				a.update(func() {
 					if p.session == s {

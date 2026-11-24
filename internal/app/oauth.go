@@ -125,6 +125,13 @@ func (a *App) update(fn func()) {
 	a.win.Update(fn)
 }
 
+// invalidate asks the window for a frame; nothing without a window.
+func (a *App) invalidate() {
+	if a.win != nil {
+		a.win.Invalidate()
+	}
+}
+
 // oauthState is a sign-in in progress.
 type oauthState struct {
 	cancel context.CancelFunc
