@@ -301,6 +301,10 @@ func (a *App) pageMenuItems(c *ui.Context, i int, pn *panel) {
 	if a.menuItem(c, "icon", "Ubah ikon…", false) {
 		m.icons = true
 	}
+	if pn.cover.url == "" && a.menuItem(c, "cover", "Tambah cover", false) {
+		m.open = false
+		pn.cover.editing, pn.cover.input = true, ""
+	}
 	if a.menuItem(c, "move", "Pindahkan ke…", false) {
 		m.moving = true
 	}

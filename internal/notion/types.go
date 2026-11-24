@@ -171,6 +171,15 @@ type Page struct {
 		Type  string `json:"type"`
 		Emoji string `json:"emoji,omitempty"`
 	} `json:"icon,omitempty"`
+	Cover *struct {
+		Type     string `json:"type"`
+		External *struct {
+			URL string `json:"url"`
+		} `json:"external,omitempty"`
+		File *struct {
+			URL string `json:"url"`
+		} `json:"file,omitempty"`
+	} `json:"cover,omitempty"`
 	// Title of a data source (search returns them alongside pages).
 	TitleText []RichText `json:"title,omitempty"`
 }
@@ -524,4 +533,17 @@ func (c *Client) CreateRow(ctx context.Context, dataSource, prop, title string) 
 		"properties": map[string]any{prop: titleValue(title)},
 	}
 	return &p, c.Do(ctx, "POST", "/pages", body, &p)
+}
+
+// CoverURL returns the URL of a page's cover, "" when it has none.
+func (p *Page) CoverURL() string {
+	switch {
+	case p.Cover == nil:
+		return ""
+	case p.Cover.External != nil:
+		return p.Cover.External.URL
+	case p.Cover.File != nil:
+		return p.Cover.File.URL
+	}
+	return ""
 }

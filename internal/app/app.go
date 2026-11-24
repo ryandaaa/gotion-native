@@ -57,6 +57,8 @@ type panel struct {
 	comments commentsState
 	// the properties of a database row, over its text
 	props *tableView
+	// the cover across its top
+	cover coverState
 	// focusEditor gives the editor the keyboard on its next frame.
 	focusEditor bool
 	width       float32
@@ -800,6 +802,9 @@ func (a *App) openPage(p *panel, id string) {
 			}
 			a.registerChildren(id, extras)
 			a.loadProps(p)
+			if s.Page != nil {
+				a.loadCover(p, s.Page.CoverURL())
+			}
 			s.Start()
 		})
 	}()

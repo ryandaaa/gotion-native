@@ -172,3 +172,16 @@ func Condition(p Property, op, value string) any {
 	}
 	return map[string]any{"property": p.Name, key: map[string]any{op: v}}
 }
+
+// SetCover gives a page a cover: a picture at url, an upload by its ID,
+// or none when both are "".
+func (c *Client) SetCover(ctx context.Context, id, url, uploadID string) error {
+	var cover any
+	switch {
+	case uploadID != "":
+		cover = map[string]any{"type": "file_upload", "file_upload": map[string]string{"id": uploadID}}
+	case url != "":
+		cover = map[string]any{"type": "external", "external": map[string]string{"url": url}}
+	}
+	return c.Do(ctx, "PATCH", "/pages/"+id, map[string]any{"cover": cover}, nil)
+}

@@ -100,5 +100,6 @@ var (
 	iconSort     = icon(`<path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/>`)
 	iconImport   = icon(`<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>`)
 	iconRestore  = icon(`<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>`)
+	iconUpload   = icon(`<path d="M12 21V9M7 14l5-5 5 5M5 3h14"/>`)
 	iconAuto     = icon(`<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>`)
 )

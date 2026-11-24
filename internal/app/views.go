@@ -799,6 +799,7 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	}
 	pad := padding(width, a.set.FullWidth)
 	pn.textWidth = width - 2*pad
+	a.coverView(c, pn)
 	// The page, and its comments beside it when open.
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		a.pageBody(c, i, pn, n, width, pad)
