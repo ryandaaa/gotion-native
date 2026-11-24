@@ -55,6 +55,8 @@ type panel struct {
 	menu pageMenu
 	// the comments beside it
 	comments commentsState
+	// the properties of a database row, over its text
+	props *tableView
 	// focusEditor gives the editor the keyboard on its next frame.
 	focusEditor bool
 	width       float32
@@ -797,6 +799,7 @@ func (a *App) openPage(p *panel, id string) {
 				}
 			}
 			a.registerChildren(id, extras)
+			a.loadProps(p)
 			s.Start()
 		})
 	}()

@@ -836,6 +836,7 @@ func (a *App) pageBody(c *ui.Context, i int, pn *panel, n *node, width, pad floa
 				a.sendTitle(pn)
 			}
 		})
+		a.propsView(c, pn, pad)
 		a.extrasView(c, i, pn, pad)
 		a.editor(c, i, pn, pad)
 	})
