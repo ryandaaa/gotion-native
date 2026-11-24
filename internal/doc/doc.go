@@ -45,7 +45,10 @@ func iconRun(e string, shape Shape) []richtext.Run {
 		if img := shape.Emoji(e); img != nil {
 			return []richtext.Run{
 				{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Tag: uiTag + e,
-					Attachment: &richtext.Attachment{Image: img, Width: 18, Height: 18, Name: e}}},
+					Attachment: &richtext.Attachment{Width: 18, Height: 18, Name: e, Draw: func(p *ui.Painter, r ui.Rect) {
+						// Lowered as the glyphs are, to center on the text.
+						p.Image(img, ui.Rect{X: r.X, Y: r.Y + iconDrop, W: r.W, H: r.H}, ui.Contain)
+					}}}},
 				decoration(" ", "", ui.Color{}),
 			}
 		}
@@ -53,12 +56,18 @@ func iconRun(e string, shape Shape) []richtext.Run {
 	return []richtext.Run{decoration(e+" ", "", ui.Color{})}
 }
 
+// iconDrop is how far icons in a line draw below their box, to center on
+// the text's lowercase letters rather than sit on its baseline.
+const iconDrop = 3
+
 // glyph draws a page or table icon in line, in the theme's muted color.
 func glyph(kind string) richtext.Run {
 	return richtext.Run{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Tag: uiTag + kind,
 		Attachment: &richtext.Attachment{Name: kind, Width: 22, Height: 16, Draw: func(p *ui.Painter, r ui.Rect) {
 			c := p.Theme().TextMuted
-			x, y := r.X+2, r.Y+1
+			// The box sits on the baseline; the glyph centers on the
+			// lowercase letters, a little lower.
+			x, y := r.X+2, r.Y+iconDrop
 			switch kind {
 			case "page":
 				p.Stroke(ui.Rect{X: x, Y: y, W: 12, H: 14}, c, 2, 1.3)

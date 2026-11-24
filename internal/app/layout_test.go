@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
@@ -174,4 +175,44 @@ func TestZoomedWindow(t *testing.T) {
 	tester.Frame()
 	tester.Frame()
 	snapshot(t, tester, "zoom-125")
+}
+
+// TestSidebarSlides: shutting the sidebar slides it away over a few
+// frames, and leaves room on the left of the panels.
+func TestSidebarSlides(t *testing.T) {
+	a := tableApp(t)
+	tester := ui.NewTester(a.View, 1280, 600)
+	tester.Frame()
+	open := snapshot(t, tester, "sidebar-open")
+	a.set.SidebarOff = true
+	tester.Frame() // as the click on the button builds one
+	tester.Advance(80 * time.Millisecond)
+	mid := snapshot(t, tester, "sidebar-closing")
+	tester.Advance(2 * time.Second)
+	shut := snapshot(t, tester, "sidebar-off")
+	if bytes.Equal(open, mid) || bytes.Equal(mid, shut) {
+		t.Error("the sidebar does not slide: no frame between open and shut")
+	}
+	// It comes back the same way.
+	a.set.SidebarOff = false
+	tester.Frame()
+	tester.Advance(2 * time.Second)
+	if !bytes.Equal(open, snapshot(t, tester, "sidebar-back")) {
+		t.Error("the sidebar came back different")
+	}
+}
+
+// TestSwitcherFadesIn: the quick switcher comes in over a few frames.
+func TestSwitcherFadesIn(t *testing.T) {
+	a := tableApp(t)
+	tester := ui.NewTester(a.View, 1280, 600)
+	tester.Frame()
+	a.openSwitcher()
+	tester.Frame()
+	tester.Advance(60 * time.Millisecond)
+	mid := snapshot(t, tester, "switcher-opening")
+	tester.Advance(time.Second)
+	if bytes.Equal(mid, snapshot(t, tester, "switcher-open")) {
+		t.Error("the switcher shows at once, with no frame between")
+	}
 }

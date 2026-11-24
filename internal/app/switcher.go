@@ -3,6 +3,7 @@ package app
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -61,13 +62,15 @@ func (a *App) switcherView(c *ui.Context) {
 			a.open(n, a.focus)
 		}
 	}
-	scrim := ui.Column(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).ZIndex(50).
-		Background(ui.RGBA(0, 0, 0, 0.28)).AlignItems(ui.Center).Padding(90, 0, 0, 0).Modal()
+	scrim := ui.Column(c.Key("switcher")).Absolute().Left(0).Top(0).Right(0).Bottom(0).ZIndex(50).
+		Background(ui.RGBA(0, 0, 0, 0.28)).AlignItems(ui.Center).Padding(90, 0, 0, 0).Modal().
+		Transition(fadeIn)
 	if scrim.Clicked() {
 		s.open = false
 	}
 	scrim.Children(func() {
-		ui.Column(c).Width(560).Background(p.Panel).Radius(12).Clip().Shadow(0, 16, 48, 0, ui.RGBA(0, 0, 0, 0.25)).Children(func() {
+		ui.Column(c.Key("switcher-card")).Width(560).Background(p.Panel).Radius(12).Clip().Shadow(0, 16, 48, 0, ui.RGBA(0, 0, 0, 0.25)).
+			TransformOrigin(0.5, 0).Transition(popIn).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(10).Padding(12, 16).BorderWidth(0, 0, 1, 0).BorderColor(p.Line).Children(func() {
 				ui.Icon(c, iconSearch).Size(16, 16).TextColor(p.Faint)
 				in := ui.TextInput(c, &s.query).Placeholder("Cari halaman atau database…").Grow(1).AutoFocus().
@@ -127,3 +130,13 @@ func (a *App) switcherView(c *ui.Context) {
 		})
 	})
 }
+
+// fadeIn and popIn are how overlays come and go: the backdrop fades, the
+// card fades while it grows a little and comes down, as a sheet settles.
+var (
+	fadeIn = ui.ElementTransition{Duration: 160 * time.Millisecond, Ease: ui.EaseOut,
+		Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, ExitDuration: 120 * time.Millisecond}
+	popIn = ui.ElementTransition{Duration: 200 * time.Millisecond, Ease: ui.EaseOut,
+		Enter: &ui.Motion{Opacity: 0, Scale: 0.96, Y: -10}, Exit: &ui.Motion{Opacity: 0, Scale: 0.98, Y: -6},
+		ExitDuration: 120 * time.Millisecond}
+)

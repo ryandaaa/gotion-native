@@ -41,15 +41,27 @@ func (a *App) View(c *ui.Context) {
 	a.shortcuts(c)
 	ui.Column(c).Fill().Background(p.Sidebar).Children(func() {
 		a.titleBar(c, true)
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			if a.set.SidebarOff {
-				a.main(c)
-				return
+		row := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch)
+		// The sidebar slides open and shut: its width springs to its target,
+		// its content keeping its own width, clipped, as it goes.
+		target := a.set.SidebarWidth
+		if a.set.SidebarOff {
+			target = 0
+		}
+		w := row.AnimateTo("sidebar", target, ui.Smooth)
+		open := min(1, max(0, w/a.set.SidebarWidth))
+		row.Children(func() {
+			if w > 0.5 {
+				ui.Box(c).Width(w).Shrink(0).Clip().Children(func() {
+					ui.Column(c).Width(a.set.SidebarWidth).FillHeight().Children(func() { a.sidebar(c) })
+				})
 			}
-			s := ui.Split(c, &a.set.SidebarWidth, func() { a.sidebar(c) }, func() { a.main(c) }).Fill()
-			if s.Changed() {
-				a.saveSettings()
+			if !a.set.SidebarOff {
+				a.sidebarHandle(c)
 			}
+			// Room on the left of the panels while the sidebar is shut, so
+			// they keep looking like cards.
+			a.main(c, 10*(1-open))
 		})
 	})
 	if a.switcher.open {
@@ -521,8 +533,8 @@ func ago(t time.Time) string {
 }
 
 // main is the panels.
-func (a *App) main(c *ui.Context) {
-	ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Stretch).Padding(0, 10, 10, 0).Children(func() {
+func (a *App) main(c *ui.Context, left float32) {
+	ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Stretch).Padding(0, 10, 10, left).Children(func() {
 		if a.panels[1] == nil {
 			a.panelView(c, 0)
 			return
@@ -546,6 +558,14 @@ func (a *App) panelView(c *ui.Context, i int) {
 	pn := a.panels[i]
 	card := ui.Column(c.Key(fmt.Sprint("panel", i))).Fill().MinWidth(0).Background(p.Panel).Radius(12).Clip().
 		Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.08))
+	if a.panels[1] != nil {
+		// A gutter between the two cards, the divider in its middle.
+		if i == 0 {
+			card.Margin(0, 5, 0, 0)
+		} else {
+			card.Margin(0, 0, 0, 5)
+		}
+	}
 	if card.PressedInside() {
 		a.focus = i
 	}
@@ -832,5 +852,29 @@ func (a *App) prose(pad float32) *richtext.Theme {
 			{Size: 1.5, Weight: 650, Top: 1.05, Bottom: 0.4, LineHeight: 1.3},
 			{Size: 1.25, Weight: 600, Top: 0.95, Bottom: 0.35, LineHeight: 1.35},
 		},
+	}
+}
+
+// sidebarHandle is the edge between the sidebar and the panels: dragging it
+// sets the sidebar's width, a double click puts it back. It shows a line
+// only under the pointer.
+func (a *App) sidebarHandle(c *ui.Context) {
+	p := a.pal()
+	h := ui.Box(c.Key("sidebar-edge")).Width(10).Shrink(0).FillHeight().Cursor(ui.CursorResizeEW).Label("Lebar sidebar")
+	active := h.Hovered() || h.Pressed()
+	h.Draw(func(pt *ui.Painter, r ui.Rect) {
+		if active {
+			pt.Fill(ui.Rect{X: r.X + r.W/2 - 1, Y: r.Y + 8, W: 2, H: r.H - 16}, p.Accent.Alpha(0.7), 1)
+		}
+	})
+	if dx, _, ok := h.Dragged(); ok {
+		a.set.SidebarWidth = min(max(a.set.SidebarWidth+dx, 200), 480)
+	}
+	if _, _, ended := h.DragEnded(); ended {
+		a.saveSettings()
+	}
+	if h.DoubleClicked() {
+		a.set.SidebarWidth = 270
+		a.saveSettings()
 	}
 }

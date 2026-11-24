@@ -144,7 +144,8 @@ func (a *App) slashView(c *ui.Context, pn *panel) {
 	}
 	p := a.pal()
 	items := s.matches()
-	ui.Column(c).Absolute().Left(r.X).Top(r.Y+r.H+6).Width(280).ZIndex(20).Padding(6).Gap(1).
+	ui.Column(c.Key("slash-menu")).Absolute().Left(r.X).Top(r.Y+r.H+6).Width(280).ZIndex(20).Padding(6).Gap(1).
+		TransformOrigin(0, 0).Transition(popIn).
 		Background(p.Panel).Radius(10).Border(1, p.Line).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, 0.16)).Children(func() {
 		ui.Text(c, "Block dasar").FontSize(11).FontWeight(600).TextColor(p.Faint).Padding(4, 8)
 		for j, cmd := range items {
@@ -192,7 +193,8 @@ func (a *App) formatBar(c *ui.Context, pn *panel) {
 	if top < 0 {
 		top = r.Y + r.H + 8
 	}
-	ui.Row(c).Absolute().Left(max(8, r.X-120)).Top(top).ZIndex(20).Padding(4).Gap(2).AlignItems(ui.Center).
+	ui.Row(c.Key("format-bar")).Absolute().Left(max(8, r.X-120)).Top(top).ZIndex(20).Padding(4).Gap(2).AlignItems(ui.Center).
+		Transition(fadeIn).
 		Background(p.Panel).Radius(9).Border(1, p.Line).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.14)).Children(func() {
 		fmtButton(c, p, "B", "Tebal (Ctrl+B)", f.Bold == richtext.FormatOn, pn, pn.doc.ToggleBold).Bold()
 		fmtButton(c, p, "I", "Miring (Ctrl+I)", f.Italic == richtext.FormatOn, pn, pn.doc.ToggleItalic).Italic()
