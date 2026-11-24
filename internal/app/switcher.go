@@ -39,7 +39,7 @@ func (a *App) switcherMatches() []*node {
 				return pi
 			}
 		}
-		return out[i].Edited.After(out[j].Edited)
+		return byEditedThenTitle(out[i], out[j])
 	})
 	if len(out) > 12 {
 		out = out[:12]
@@ -119,7 +119,7 @@ func (a *App) switcherView(c *ui.Context) {
 							crumb = append(crumb, up.Title)
 						}
 						ui.Text(c, strings.Join(crumb, " / ")).FontSize(12).TextColor(p.Faint).SingleLine().MinWidth(0).Grow(1)
-						ui.Text(c, ago(n.Edited)).FontSize(12).TextColor(p.Faint)
+						ui.Text(c, ago(n.Edited)).FontSize(12).TextColor(p.Faint).SingleLine().Shrink(0)
 					})
 					if row.Clicked() {
 						pick(n, row.ClickModifiers()&ui.Ctrl != 0)

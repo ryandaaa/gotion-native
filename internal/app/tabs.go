@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"gotion/internal/emoji"
@@ -213,4 +215,23 @@ func (a *App) kindOf(id string) string {
 		return n.Kind
 	}
 	return ""
+}
+
+// byTitleThenID orders pages by title, then by ID: never two the same, so
+// pages listed from a map come out the same way every frame.
+func byTitleThenID(x, y *node) bool {
+	tx, ty := strings.ToLower(x.Title), strings.ToLower(y.Title)
+	if tx != ty {
+		return tx < ty
+	}
+	return x.ID < y.ID
+}
+
+// byEditedThenTitle orders pages by when they were edited, the latest
+// first; pages edited at once (Notion keeps the minute) by title and ID.
+func byEditedThenTitle(x, y *node) bool {
+	if !x.Edited.Equal(y.Edited) {
+		return x.Edited.After(y.Edited)
+	}
+	return byTitleThenID(x, y)
 }

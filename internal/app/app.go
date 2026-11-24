@@ -418,7 +418,7 @@ func (a *App) regroup() {
 		}
 	}
 	byTitle := func(ns []*node) {
-		sort.Slice(ns, func(i, j int) bool { return strings.ToLower(ns[i].Title) < strings.ToLower(ns[j].Title) })
+		sort.Slice(ns, func(i, j int) bool { return byTitleThenID(ns[i], ns[j]) })
 	}
 	byTitle(a.groups)
 	byTitle(a.databases)

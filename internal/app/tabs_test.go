@@ -117,3 +117,23 @@ func TestTabsShot(t *testing.T) {
 		t.Errorf("a click on a tab shows %q", a.panels[0].id)
 	}
 }
+
+// TestSwitcherOrderIsStable: pages edited in the same minute list in the
+// same order every time, not as the map happens to give them.
+func TestSwitcherOrderIsStable(t *testing.T) {
+	a := tabsApp(t)
+	when := time.Date(2026, 9, 14, 10, 0, 0, 0, time.UTC)
+	for i := 0; i < 40; i++ {
+		id := "lit" + string(rune('a'+i%26)) + string(rune('a'+i/26))
+		a.nodes[id] = &node{ID: id, Title: "Literature " + id, Kind: "page", Edited: when}
+	}
+	first := a.switcherMatches()
+	for k := 0; k < 50; k++ {
+		got := a.switcherMatches()
+		for j := range got {
+			if got[j].ID != first[j].ID {
+				t.Fatalf("run %d: item %d is %s, was %s", k, j, got[j].ID, first[j].ID)
+			}
+		}
+	}
+}

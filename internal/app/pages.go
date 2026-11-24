@@ -75,9 +75,9 @@ func (a *App) libraryPanel(c *ui.Context, i int) {
 	}
 	sort.Slice(items, func(x, y int) bool {
 		if l.order == "title" {
-			return strings.ToLower(items[x].Title) < strings.ToLower(items[y].Title)
+			return byTitleThenID(items[x], items[y])
 		}
-		return items[x].Edited.After(items[y].Edited)
+		return byEditedThenTitle(items[x], items[y])
 	})
 	ui.Column(c).Grow(1).MinHeight(0).Padding(24, 32, 0, 32).Gap(14).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
@@ -122,7 +122,7 @@ func (a *App) libraryPanel(c *ui.Context, i int) {
 							crumb = append(crumb, up.Title)
 						}
 						ui.Text(c, strings.Join(crumb, " / ")).FontSize(12).TextColor(p.Faint).SingleLine().MinWidth(0).Grow(1)
-						ui.Text(c, ago(n.Edited)).FontSize(12).TextColor(p.Faint)
+						ui.Text(c, ago(n.Edited)).FontSize(12).TextColor(p.Faint).SingleLine().Shrink(0)
 					})
 					if row.Clicked() {
 						a.open(n, i)
@@ -394,7 +394,7 @@ func (a *App) movePicker(c *ui.Context, pn *panel) {
 			targets = append(targets, n)
 		}
 	}
-	sort.Slice(targets, func(x, y int) bool { return targets[x].Edited.After(targets[y].Edited) })
+	sort.Slice(targets, func(x, y int) bool { return byEditedThenTitle(targets[x], targets[y]) })
 	if len(targets) > 8 {
 		targets = targets[:8]
 	}

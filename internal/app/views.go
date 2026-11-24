@@ -545,7 +545,7 @@ func (a *App) item(c *ui.Context, n *node, depth int) {
 			ui.Text(c, "db").FontSize(11).FontWeight(600).TextColor(p.Muted).Padding(1, 6).Background(p.Hover).Radius(5)
 			return
 		}
-		ui.Text(c, ago(n.Edited)).FontSize(12).TextColor(p.Faint)
+		ui.Text(c, ago(n.Edited)).FontSize(12).TextColor(p.Faint).SingleLine().Shrink(0)
 		if current != nil && current.session != nil {
 			st, _ := current.session.Status()
 			statusIcon(c, p, st).Size(14, 14)
