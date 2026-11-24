@@ -69,9 +69,7 @@ type panel struct {
 	textWidth float32
 	// readOnly holds what each read-only paragraph holds (guardReadOnly).
 	readOnly map[string]string
-	// restore is the paragraph to scroll to once the editor shows, -1 none.
-	restore int
-	warned  bool
+	warned   bool
 }
 
 // App is the state of the window.
@@ -199,8 +197,6 @@ type settings struct {
 	Wash         string          `json:"wash"`    // the color behind the cards
 	Trashed      []trashed       `json:"trashed"` // pages put in the trash from gotion
 	Glass        bool            `json:"glass"`   // the system's glass behind them
-	// Scroll is the first paragraph in view of each page, to come back to.
-	Scroll map[string]int `json:"scroll"`
 	// Views is how each database shows: "table" or "cards".
 	Views map[string]string `json:"views"`
 	// Language is "id" or "en", or "" to follow the system's.
@@ -220,9 +216,6 @@ func loadSettings() settings {
 	}
 	if s.Toggles == nil {
 		s.Toggles = map[string]bool{}
-	}
-	if s.Scroll == nil {
-		s.Scroll = map[string]int{}
 	}
 	if s.Views == nil {
 		s.Views = map[string]string{}
@@ -804,10 +797,6 @@ func (a *App) openPage(p *panel, id string) {
 			s.OnError = func(msg string) { a.update(func() { a.toast(msg) }) }
 			p.session, p.doc, p.extras = s, d, extras
 			a.guardReadOnly(p)
-			p.restore = -1
-			if i, ok := a.set.Scroll[id]; ok {
-				p.restore = i
-			}
 			if s.Page != nil {
 				title := s.Page.Title()
 				p.title, p.titleSent = title, title

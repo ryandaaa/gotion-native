@@ -59,7 +59,7 @@ func BenchmarkKeystroke2000(b *testing.B) {
 func BenchmarkFrame2000(b *testing.B) {
 	text, _, _ := doc.Build("p", bigBlocks(2000), doc.Shape{})
 	a := &App{client: notion.New("x"), bot: &notion.User{}, panels: [2]*panel{{}, nil}}
-	a.set = settings{Theme: "light", SidebarWidth: 270, Zoom: 1, Open: map[string]bool{}, Closed: map[string]bool{}, Toggles: map[string]bool{}, Scroll: map[string]int{}}
+	a.set = settings{Theme: "light", SidebarWidth: 270, Zoom: 1, Open: map[string]bool{}, Closed: map[string]bool{}, Toggles: map[string]bool{}}
 	a.nodes = map[string]*node{"p": {ID: "p", Title: "Panjang", Kind: "page"}}
 	for i := 0; i < 300; i++ {
 		id := fmt.Sprintf("n%d", i)

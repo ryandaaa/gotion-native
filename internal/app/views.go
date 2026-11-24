@@ -882,7 +882,6 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 				a.mentionUpdate(pn)
 			}
 		}
-		a.trackScroll(pn)
 		a.handles(c, pn, box, pad)
 		a.slashView(c, pn)
 		a.mentionView(c, pn)
@@ -909,29 +908,6 @@ func padding(width float32, full bool) float32 {
 		pad = max(16, (width-minText)/2)
 	}
 	return pad
-}
-
-// trackScroll puts the page back where it was read last, once its editor
-// shows, and remembers where it is read now.
-func (a *App) trackScroll(pn *panel) {
-	vis := pn.doc.VisibleParagraphs()
-	if vis == nil {
-		return // not shown yet
-	}
-	if pn.restore >= 0 {
-		pn.doc.ScrollToParagraph(pn.restore, ui.ScrollStart)
-		pn.restore = -1
-		return
-	}
-	if a.set.Scroll == nil {
-		a.set.Scroll = map[string]int{}
-	}
-	for _, b := range vis {
-		if b.Top+b.Height > 0 {
-			a.set.Scroll[pn.id] = b.Index
-			return
-		}
-	}
 }
 
 // prose is how page text looks: room to breathe between paragraphs and
