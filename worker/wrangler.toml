@@ -1,6 +1,7 @@
 name = "gotion-oauth"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
+account_id = "1c73f06b1e20ec6d3ed31016c7937acd"
 
 # Set the integration's credentials as secrets, not here:
 #   npx wrangler secret put NOTION_CLIENT_ID
