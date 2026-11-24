@@ -83,8 +83,10 @@ type App struct {
 	loadErr   string
 	query     string
 
-	// panels: the first always, the second when split
+	// panels: the first always, the second when split; each shows its
+	// active tab
 	panels [2]*panel
+	tabs   [2][]*panel
 	focus  int
 
 	// history of the first panel
@@ -127,15 +129,7 @@ func (a *App) Attach(w *mygo.Window) {
 		return
 	}
 	a.refresh()
-	if n := a.nodes[a.set.Last]; n != nil {
-		a.open(n, 0)
-	}
-	if a.set.Second != "" {
-		if n := a.nodes[a.set.Second]; n != nil {
-			a.panels[1] = &panel{}
-			a.open(n, 1)
-		}
-	}
+	a.restoreTabs()
 }
 
 // Close sends unsaved edits.
@@ -173,6 +167,8 @@ type settings struct {
 	Closed       map[string]bool `json:"closed"` // collapsed groups
 	Last         string          `json:"last"`
 	Second       string          `json:"second"`
+	Tabs         [2][]string     `json:"tabs"`   // each panel's tabs
+	Active       [2]int          `json:"active"` // and which shows
 	SplitSize    float32         `json:"splitSize"`
 	FullWidth    bool            `json:"fullWidth"`
 	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
@@ -497,16 +493,65 @@ func (a *App) openID(id, kind, parent string, i int) {
 	a.open(n, i)
 }
 
-// open shows n in panel i.
+// navigateID goes to a page or table by ID in panel i's active tab, as a
+// link does.
+func (a *App) navigateID(id, kind, parent string, i int) {
+	n := a.nodes[id]
+	if n == nil {
+		n = &node{ID: id, Title: "Memuat…", Kind: kind, ParentID: parent}
+		a.nodes[id] = n
+		a.regroup()
+	}
+	a.navigate(n, i)
+}
+
+// open shows n in panel i in a tab of its own: the tab already showing
+// it, else a new one after the active tab (or the empty panel itself).
 func (a *App) open(n *node, i int) {
 	if a.panels[i] == nil {
 		a.panels[i] = &panel{}
 	}
-	p := a.panels[i]
 	a.focus = i
-	if p.id == n.ID && (p.doc != nil || p.table != nil || p.opening) {
+	for _, t := range a.tabs[i] {
+		if t.id == n.ID {
+			a.activate(i, t)
+			a.remember(n, i)
+			return
+		}
+	}
+	if a.panels[i].id == "" {
+		a.remember(n, i)
+		a.show(n, i)
 		return
 	}
+	p := &panel{id: n.ID}
+	k := a.tabIndex(i, a.panels[i]) + 1
+	a.tabs[i] = append(a.tabs[i][:k], append([]*panel{p}, a.tabs[i][k:]...)...)
+	a.panels[i] = p
+	a.remember(n, i)
+	a.load(p, n)
+}
+
+// navigate shows n in panel i's active tab, as a link in a page does.
+func (a *App) navigate(n *node, i int) {
+	if a.panels[i] == nil || a.panels[i].id == "" {
+		a.open(n, i)
+		return
+	}
+	for _, t := range a.tabs[i] {
+		if t.id == n.ID {
+			a.activate(i, t)
+			a.remember(n, i)
+			return
+		}
+	}
+	a.remember(n, i)
+	a.show(n, i)
+}
+
+// remember keeps where panel i went: its history, the tree open down to
+// it, and the tabs for the next run.
+func (a *App) remember(n *node, i int) {
 	if i == 0 {
 		// Going somewhere new drops the pages ahead.
 		if len(a.history) > 0 {
@@ -516,27 +561,33 @@ func (a *App) open(n *node, i int) {
 			a.history = append(a.history, n.ID)
 		}
 		a.hpos = len(a.history) - 1
-		a.set.Last = n.ID
-	} else {
-		a.set.Second = n.ID
 	}
-	// Expand the tree down to the page.
 	for _, up := range a.path(n.ID) {
 		a.set.Open[up.ID] = true
 	}
-	a.saveSettings()
-	a.show(n, i)
+	a.saveTabs()
 }
 
-// show loads n into panel i, closing what it showed.
+// show loads n into panel i's active tab, closing what it showed.
 func (a *App) show(n *node, i int) {
-	p := a.panels[i]
-	if p.session != nil {
-		s := p.session
+	old := a.panels[i]
+	if old != nil && old.session != nil {
+		s := old.session
 		go s.Close()
 	}
-	p = &panel{id: n.ID}
+	p := &panel{id: n.ID}
+	if k := a.tabIndex(i, old); k >= 0 {
+		a.tabs[i][k] = p
+	} else {
+		a.tabs[i] = append(a.tabs[i], p)
+	}
 	a.panels[i] = p
+	a.saveTabs()
+	a.load(p, n)
+}
+
+// load fetches what panel p shows: a page or a table.
+func (a *App) load(p *panel, n *node) {
 	if n.Kind == "data_source" || n.Kind == "database" {
 		a.openTable(p, n)
 		return
@@ -548,8 +599,8 @@ func (a *App) back() {
 	if a.hpos > 0 {
 		a.hpos--
 		if n := a.nodes[a.history[a.hpos]]; n != nil {
-			a.show(n, 0)
-			a.set.Last = n.ID
+			a.focus = 0
+			a.showOrActivate(n, 0)
 		}
 	}
 }
@@ -558,10 +609,22 @@ func (a *App) forward() {
 	if a.hpos < len(a.history)-1 {
 		a.hpos++
 		if n := a.nodes[a.history[a.hpos]]; n != nil {
-			a.show(n, 0)
-			a.set.Last = n.ID
+			a.focus = 0
+			a.showOrActivate(n, 0)
 		}
 	}
+}
+
+// showOrActivate goes to n in panel i without adding to its history: to
+// its tab if it has one, else in the active tab.
+func (a *App) showOrActivate(n *node, i int) {
+	for _, t := range a.tabs[i] {
+		if t.id == n.ID {
+			a.activate(i, t)
+			return
+		}
+	}
+	a.show(n, i)
 }
 
 // openBeside opens n in the second panel.
@@ -591,19 +654,21 @@ func (a *App) guessSplit() {
 }
 
 func (a *App) closeSecond() {
-	if p := a.panels[1]; p != nil {
-		if p.session != nil {
-			go p.session.Close()
-		}
-		a.panels[1] = nil
-		a.focus = 0
-		a.set.Second = ""
-		a.widths[0] += a.widths[1]
-		if a.panels[0] != nil {
-			a.panels[0].width = a.widths[0]
-		}
-		a.saveSettings()
+	if a.panels[1] == nil {
+		return
 	}
+	for _, t := range a.tabs[1] {
+		if t.session != nil {
+			go t.session.Close()
+		}
+	}
+	a.panels[1], a.tabs[1] = nil, nil
+	a.focus = 0
+	a.widths[0] += a.widths[1]
+	if a.panels[0] != nil {
+		a.panels[0].width = a.widths[0]
+	}
+	a.saveTabs()
 }
 
 // followLink opens a link clicked in panel i's editor.
@@ -631,9 +696,9 @@ func (a *App) followLink(i int) func(url string) {
 			case "file":
 				a.download(id)
 			case "page":
-				a.openID(id, "page", parent, i)
+				a.navigateID(id, "page", parent, i)
 			case "db":
-				a.openID(id, "database", parent, i)
+				a.navigateID(id, "database", parent, i)
 			case "toggle":
 				a.set.Toggles[id] = !a.set.Toggles[id]
 				a.saveSettings()
@@ -722,7 +787,9 @@ func (a *App) openPage(p *panel, id string) {
 	}()
 }
 
-func (a *App) has(p *panel) bool { return a.panels[0] == p || a.panels[1] == p }
+// has reports whether p is a tab of either panel: a page loading into a
+// tab closed meanwhile is dropped.
+func (a *App) has(p *panel) bool { return a.tabIndex(0, p) >= 0 || a.tabIndex(1, p) >= 0 }
 
 // sendTitle sends panel p's title when it changed.
 func (a *App) sendTitle(p *panel) {

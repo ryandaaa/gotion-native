@@ -108,7 +108,13 @@ func (a *App) shortcuts(c *ui.Context) {
 		a.set.SidebarOff = !a.set.SidebarOff
 		a.saveSettings()
 	case c.Shortcut(ui.Cmd, ui.KeyW):
-		a.closeSecond()
+		if p := a.panels[a.focus]; p != nil {
+			a.closeTab(a.focus, a.tabIndex(a.focus, p))
+		}
+	case c.Shortcut(ui.Ctrl, ui.KeyTab):
+		a.cycleTab(1)
+	case c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyTab):
+		a.cycleTab(-1)
 	case c.Shortcut(ui.Cmd|ui.Shift, ui.KeyL):
 		a.cycleTheme()
 	case c.Shortcut(ui.Cmd, ui.KeyR):
@@ -660,10 +666,10 @@ func (a *App) empty(c *ui.Context) {
 // panelHeader is the bar over a panel.
 func (a *App) panelHeader(c *ui.Context, i int, s *ui.SVG, title, badge string, right func()) {
 	p := a.pal()
-	ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(10, 12, 10, 16).BorderWidth(0, 0, 1, 0).BorderColor(p.Line).Children(func() {
-		ui.Icon(c, s).Size(16, 16).TextColor(p.Muted)
-		ui.Text(c, title).FontSize(14).FontWeight(600).SingleLine().MinWidth(0).Shrink(1)
-		ui.Box(c).Grow(1)
+	// The tabs, on the panel's own strip, then the page's controls.
+	ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 10, 6, 6).Background(p.Sidebar.Alpha(0.6)).
+		BorderWidth(0, 0, 1, 0).BorderColor(p.Line).Children(func() {
+		a.tabStrip(c, i)
 		if right != nil {
 			right()
 		}
@@ -676,14 +682,19 @@ func (a *App) panelHeader(c *ui.Context, i int, s *ui.SVG, title, badge string, 
 					}
 				}
 			}
-		} else if iconButton(c, p, iconClose, "Tutup panel (Ctrl+W)") {
+		} else if iconButton(c, p, iconSidebar, "Tutup panel ini") {
 			if i == 1 {
 				a.closeSecond()
 			} else {
-				a.panels[0], a.panels[1] = a.panels[1], nil
-				a.set.Last, a.set.Second = a.panels[0].id, ""
+				for _, t := range a.tabs[0] {
+					if t.session != nil {
+						go t.session.Close()
+					}
+				}
+				a.panels[0], a.tabs[0] = a.panels[1], a.tabs[1]
+				a.panels[1], a.tabs[1] = nil, nil
 				a.focus = 0
-				a.saveSettings()
+				a.saveTabs()
 			}
 		}
 	})
