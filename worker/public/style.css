@@ -23,8 +23,10 @@
   --glow: rgba(235, 215, 248, 0.7);
   color-scheme: light;
 }
+/* Dark: the system's choice unless the switch said light, or the switch
+   said dark. A plain gray, without the wash. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1c1c1e;
     --card: #252527;
     --ink: #ededec;
@@ -36,11 +38,27 @@
     --on-ink: #1c1c1e;
     --accent: #a993ff;
     --dot: rgba(237, 237, 236, 0.16);
-    --wash: linear-gradient(180deg, #1d1426 0, #211320 900px, #22170f 100%);
-    --glow: rgba(120, 70, 160, 0.28);
+    --wash: none;
+    --glow: transparent;
     color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #1c1c1e;
+  --card: #252527;
+  --ink: #ededec;
+  --muted: #c4c1bc;
+  --faint: #a8a29e;
+  --line: #38383b;
+  --soft: #2c2c2f;
+  --caret: #60a5fa;
+  --on-ink: #1c1c1e;
+  --accent: #a993ff;
+  --dot: rgba(237, 237, 236, 0.16);
+  --wash: none;
+  --glow: transparent;
+  color-scheme: dark;
+  }
 
 /* One language shows at a time; the other's elements are hidden. */
 html[data-lang="en"] [lang="id"]:not(html),
@@ -50,7 +68,7 @@ html[data-lang="id"] [lang="en"]:not(html) { display: none !important; }
 html { background: var(--bg); color: var(--ink); }
 body {
   margin: 0; min-height: 100vh; overflow-x: clip;
-  background: radial-gradient(900px 600px at 100% 0, var(--glow), transparent 70%) no-repeat, var(--wash);
+  background: radial-gradient(900px 600px at 100% 0, var(--glow), transparent 70%) no-repeat, var(--wash), var(--bg);
   font: 400 17px/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -77,6 +95,17 @@ code, kbd { font: 500 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monos
 }
 .lang:hover { border-color: var(--faint); }
 .lang:active { background: var(--soft); }
+.theme { width: 36px; padding: 0; display: inline-grid; place-items: center; }
+.theme svg { width: 17px; height: 17px; grid-area: 1 / 1; transition: opacity .2s ease, transform .3s ease; }
+/* The switch shows what a click gives: the moon in light, the sun in dark. */
+.theme .sun { opacity: 0; transform: rotate(-60deg) scale(.6); }
+:root[data-theme="dark"] .theme .sun { opacity: 1; transform: none; }
+:root[data-theme="dark"] .theme .moon { opacity: 0; transform: rotate(60deg) scale(.6); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme .sun { opacity: 1; transform: none; }
+  :root:not([data-theme="light"]) .theme .moon { opacity: 0; transform: rotate(60deg) scale(.6); }
+}
+html { transition: background-color .25s ease; }
 
 /* The first screen */
 /* The dot grid sits behind the first screen, the whole width of the

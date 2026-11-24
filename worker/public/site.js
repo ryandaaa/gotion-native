@@ -17,6 +17,31 @@
     });
   });
 
+  // Light or dark: the system's until the switch is used, then the one
+  // chosen, kept for the next visit. The screenshot follows it.
+  var sysDark = window.matchMedia("(prefers-color-scheme: dark)");
+  function isDark() {
+    var t = root.dataset.theme;
+    return t ? t === "dark" : sysDark.matches;
+  }
+  function showTheme() {
+    var d = isDark();
+    document.querySelectorAll("picture source[data-dark]").forEach(function (src) {
+      src.media = d ? "all" : "not all";
+    });
+    document.dispatchEvent(new Event("themechange"));
+  }
+  showTheme();
+  if (sysDark.addEventListener) sysDark.addEventListener("change", showTheme);
+  document.querySelectorAll("[data-theme-switch]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var t = isDark() ? "light" : "dark";
+      root.dataset.theme = t;
+      try { localStorage.setItem("theme", t); } catch (e) {}
+      showTheme();
+    });
+  });
+
   // The visitor's system, as far as the browser tells.
   function system() {
     var ua = navigator.userAgent || "";
@@ -72,7 +97,6 @@
   var ctx = canvas.getContext("2d");
   var GAP = 26, R = 1.6, NEAR = 150, WAVE = 260;
   var still = window.matchMedia("(prefers-reduced-motion: reduce)");
-  var dark = window.matchMedia("(prefers-color-scheme: dark)");
   var dots = [], w = 0, h = 0, dpr = 1, base = "", accent = "";
   var px = -1e4, py = -1e4, pvx = 0, pvy = 0, lastT = 0;
   var running = false, visible = true;
@@ -184,8 +208,7 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(layout, 120);
   });
-  var onScheme = function () { colors(); draw(); };
-  if (dark.addEventListener) dark.addEventListener("change", onScheme);
+  document.addEventListener("themechange", function () { colors(); draw(); });
   if (still.matches) return;
 
   if ("IntersectionObserver" in window)
