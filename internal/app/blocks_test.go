@@ -7,9 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
 
 	"gotion/internal/doc"
@@ -23,14 +21,6 @@ func texts(d *richtext.Document) string {
 		out = append(out, paragraphText(d.Text(), 0)[:0]+runsText(p))
 	}
 	return strings.Join(out, "|")
-}
-
-func runsText(p richtext.Paragraph) string {
-	var b strings.Builder
-	for _, r := range p.Runs {
-		b.WriteString(r.Text)
-	}
-	return b.String()
 }
 
 func threeBlocks() *richtext.Document {
@@ -133,74 +123,13 @@ func TestMoveSyncs(t *testing.T) {
 	}
 }
 
-// TestDragGrip hovers a block, takes its grip and drops it lower: the
-// block moves. The grip is found by its pixels: its dots in the margin.
-func TestDragGrip(t *testing.T) {
-	a := tableApp(t)
-	pn := &panel{id: "ppsi", title: "Urutan", doc: threeBlocks()}
-	a.panels[0] = pn
-	tester := ui.NewTester(a.View, 1100, 600)
-	tester.Frame()
-	vis := pn.doc.VisibleParagraphs()
-	if len(vis) < 4 {
-		t.Fatalf("visible %v", vis)
+func TestAddBelow(t *testing.T) {
+	d := threeBlocks()
+	addBelow(d, 1) // after "dua" and its later line
+	if got := texts(d); got != "satu|dua|dua lanjut||tiga" {
+		t.Errorf("%q", got)
 	}
-	// The editor's top in the window: the first line's text, found by
-	// moving down the margin until the grip shows for paragraph 0.
-	var top float32 = -1
-	for y := float32(80); y < 400 && top < 0; y += 4 {
-		tester.Move(500, y)
-		tester.Frame()
-		if pn.handle.hover == 0 {
-			top = y // the box's top: the pointer is over it from there
-		}
-	}
-	if top < 0 {
-		t.Fatal("no grip showed over the first paragraph")
-	}
-	snapshot(t, tester, "grip-hover")
-	pad := padding(pn.width, false)
-	gx := pad - 30 + 11 + 0 // the grip's middle, in the editor
-	// The panel's left edge: the sidebar (270) and its edge (10).
-	gx += 280
-	gy := top + vis[0].Top + min(vis[0].Height, 26)/2
-	tester.Press(gx, gy)
-	for y := gy; y < top+vis[3].Top+vis[3].Height-2; y += 6 {
-		tester.Move(gx, y)
-		tester.Frame()
-	}
-	snapshot(t, tester, "grip-drag")
-	tester.Release(gx, top+vis[3].Top+vis[3].Height-2)
-	tester.Frame()
-	if got := texts(pn.doc); got != "dua|dua lanjut|tiga|satu" {
-		t.Errorf("after the drag: %q", got)
-	}
-}
-
-func TestGripMenuDuplicates(t *testing.T) {
-	a := tableApp(t)
-	pn := &panel{id: "ppsi", title: "Urutan", doc: threeBlocks()}
-	a.panels[0] = pn
-	tester := ui.NewTester(a.View, 1100, 600)
-	tester.Frame()
-	vis := pn.doc.VisibleParagraphs()
-	var top float32 = -1
-	for y := float32(80); y < 400 && top < 0; y += 4 {
-		tester.Move(500, y)
-		tester.Frame()
-		if pn.handle.hover == 0 {
-			top = y
-		}
-	}
-	gx := padding(pn.width, false) - 30 + 11 + 280
-	tester.ClickAt(gx, top+vis[0].Top+min(vis[0].Height, 26)/2)
-	tester.Advance(time.Second)
-	snapshot(t, tester, "grip-menu")
-	if err := tester.Click("Duplikat"); err != nil {
-		t.Fatalf("no menu: %v", err)
-	}
-	tester.Frame()
-	if got := texts(pn.doc); got != "satu|satu|dua|dua lanjut|tiga" {
-		t.Errorf("after duplicate: %q", got)
+	if _, caret := d.Selection(); caret != len("satu\ndua\ndua lanjut\n") {
+		t.Errorf("caret %d", caret)
 	}
 }

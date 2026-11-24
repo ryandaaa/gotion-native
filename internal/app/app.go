@@ -49,9 +49,11 @@ type panel struct {
 
 	// the slash menu
 	slash slashState
-	// the grip beside blocks
+	// the + beside blocks
 	handle handleState
-	width  float32
+	// focusEditor gives the editor the keyboard on its next frame.
+	focusEditor bool
+	width       float32
 	// textWidth is the width of the page's text, which tables draw across.
 	textWidth float32
 	// readOnly holds what each read-only paragraph holds (guardReadOnly).

@@ -190,31 +190,45 @@ func (a *App) handles(c *ui.Context, pn *panel, box ui.Element, pad float32) {
 	if box0 == nil {
 		return
 	}
-	grip := ui.Box(c.Key("grip")).Absolute().Left(max(4, pad-30)).Top(box0.Top+min(box0.Height, 26)/2-11).
-		Size(22, 22).Radius(5).Center().Cursor(ui.CursorGrab).ZIndex(11).Label("Pegangan block").Tooltip("Klik untuk menu, tarik untuk pindah")
-	if grip.Hovered() || h.menu || h.dragging {
-		grip.Background(p.Hover)
+	// A + beside the block adds an empty line under it, the caret there.
+	add := ui.Box(c.Key("add-below")).Absolute().Left(max(4, pad-30)).Top(box0.Top+min(box0.Height, 26)/2-11).
+		Size(22, 22).Radius(5).Center().Cursor(ui.CursorPointer).ZIndex(11).Label("Baris baru di bawah").Tooltip("Baris baru di bawahnya")
+	if add.Hovered() {
+		add.Background(p.Hover)
 	}
-	grip.Children(func() { ui.Icon(c, iconGrip).Size(16, 16).TextColor(p.Faint) })
-	// A press that moves a few DIPs is a drag; one that does not, a click.
-	if dx, dy, pressed := grip.Dragged(); pressed {
-		h.pulled += abs(dx) + abs(dy)
-		if !h.dragging && h.pulled > 4 {
-			h.dragging, h.from = true, idx
+	add.Children(func() { ui.Icon(c, iconPlus).Size(16, 16).TextColor(p.Faint) })
+	if add.Clicked() {
+		addBelow(pn.doc, idx)
+		pn.focusEditor = true
+		a.edited(pn)
+	}
+}
+
+// addBelow puts an empty paragraph after the block at paragraph i, and
+// the caret in it.
+func addBelow(d *richtext.Document, i int) {
+	paras := paragraphsOf(d)
+	_, last := blockRange(paras, i)
+	out := append([]richtext.Paragraph{}, paras[:last+1]...)
+	out = append(out, richtext.Paragraph{Style: richtext.ParagraphStyle{ID: doc.NewID(), Indent: paras[last].Style.Indent}})
+	out = append(out, paras[last+1:]...)
+	d.SetText(richtext.TextOf(out...))
+	at := 0
+	for j, p := range paragraphsOf(d) {
+		if j == last+1 {
+			break
 		}
+		at += len([]rune(runsText(p))) + 1
 	}
-	if _, _, ended := grip.DragEnded(); ended {
-		if h.dragging {
-			a.dropBlock(pn, h.from, h.dropAt)
-		}
-		h.dragging, h.pulled = false, 0
+	d.SetSelection(at, at)
+}
+
+func runsText(p richtext.Paragraph) string {
+	var b strings.Builder
+	for _, r := range p.Runs {
+		b.WriteString(r.Text)
 	}
-	if grip.Clicked() && !h.dragging {
-		h.menu, h.menuAt, h.pulled = true, idx, 0
-	}
-	if h.menu {
-		ui.Popover(c, grip, &h.menu, func() { a.blockMenu(c, pn, h.menuAt) })
-	}
+	return b.String()
 }
 
 func (a *App) idAt(pn *panel, i int) string {

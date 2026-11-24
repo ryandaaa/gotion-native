@@ -825,12 +825,30 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 			Label:       "Isi halaman",
 			Placeholder: "Ketik / untuk perintah…",
 			OnLink:      a.followLink(i),
-			OnKey:       func(k ui.Key, m ui.Modifiers) bool { return a.slashKey(pn, k, m) },
+			OnKey: func(k ui.Key, m ui.Modifiers) bool {
+				// Ctrl+V with a picture on the clipboard uploads it; with
+				// text, the editor pastes as ever.
+				if k == ui.KeyV && m == ui.Cmd && a.pasteImage(pn) {
+					return true
+				}
+				return a.slashKey(pn, k, m)
+			},
+			Menu: func(m *ui.Menu) {
+				m.EditItems()
+				m.Separator()
+				if m.Item("Tempel gambar").Disabled(len(mygo.Clipboard.ReadImage()) == 0).Chosen() {
+					a.pasteImage(pn)
+				}
+			},
 			// A picture on the clipboard is uploaded; text pastes as ever.
 			OnCommand: func(name string) bool { return name == "paste" && a.pasteImage(pn) },
 			Font:      ui.Font{Family: "Inter", Size: 16, LineHeight: 1.7},
 			Space:     func(int) float32 { return 3 },
 		}).Fill().Background(p.Panel).Border(0, p.Panel).Radius(0)
+		if pn.focusEditor {
+			pn.focusEditor = false
+			e.Focus()
+		}
 		if e.Focused() {
 			a.focus = i
 		}
