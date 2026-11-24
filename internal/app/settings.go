@@ -1,12 +1,17 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"gotion/internal/notion"
 )
 
 // Version is gotion's, set at build time with
@@ -19,6 +24,12 @@ type settingsView struct {
 	open    bool
 	section string
 	confirm bool // asking before signing out
+
+	// the workspace's members, loaded when the account shows
+	members        []notion.User
+	membersLoaded  bool
+	membersLoading bool
+	membersErr     string
 }
 
 func (a *App) openSettings(section string) {
@@ -197,6 +208,7 @@ func (a *App) accountSection(c *ui.Context) {
 			}
 		}
 	})
+	a.members(c)
 	ui.Column(c).Gap(6).Children(func() {
 		if ui.Button(c, "Hapus cache halaman").AlignSelf(ui.Start).Clicked() {
 			os.RemoveAll(filepath.Join(configDir(), "cache"))
@@ -249,6 +261,63 @@ func (a *App) aboutSection(c *ui.Context) {
 			"Tidak berafiliasi dengan Notion Labs, Inc.",
 		} {
 			ui.Text(c, line).FontSize(13).TextColor(p.Muted)
+		}
+	})
+}
+
+// members lists the workspace's people (GET /users), when the integration
+// may read them.
+func (a *App) members(c *ui.Context) {
+	p := a.pal()
+	s := &a.settings
+	if !s.membersLoaded && !s.membersLoading && a.client != nil {
+		s.membersLoading = true
+		client := a.client
+		go func() {
+			users, err := client.Users(context.Background())
+			a.update(func() {
+				s.membersLoading, s.membersLoaded = false, true
+				if err != nil {
+					var e *notion.Error
+					if errors.As(err, &e) && e.Status == 403 {
+						s.membersErr = "Integrasi ini belum boleh melihat anggota. Aktifkan “Read user information” di pengaturan integrasi Notion."
+					} else {
+						s.membersErr = errText(err)
+					}
+					return
+				}
+				for _, u := range users {
+					if u.Type == "person" {
+						s.members = append(s.members, u)
+					}
+				}
+			})
+		}()
+	}
+	ui.Column(c).Gap(8).Children(func() {
+		ui.Text(c, "Anggota workspace").FontSize(12).FontWeight(600).TextColor(p.Faint)
+		switch {
+		case s.membersLoading:
+			ui.Spinner(c).Size(16, 16)
+		case s.membersErr != "":
+			ui.Text(c, s.membersErr).FontSize(12).TextColor(p.Faint)
+		case len(s.members) == 0:
+			ui.Text(c, "Tidak ada anggota yang terlihat.").FontSize(12).TextColor(p.Faint)
+		}
+		for _, u := range s.members {
+			ui.Row(c.Key("m" + u.ID)).Gap(10).AlignItems(ui.Center).Children(func() {
+				name := nonEmpty(u.Name, "Tanpa nama")
+				initial := strings.ToUpper(string([]rune(name)[:1]))
+				ui.Box(c).Size(26, 26).Radius(13).Background(p.Accent.Alpha(0.16)).Center().Children(func() {
+					ui.Text(c, initial).FontSize(12).FontWeight(600).TextColor(p.Accent)
+				})
+				ui.Column(c).Children(func() {
+					ui.Text(c, name).FontSize(14)
+					if u.Person != nil && u.Person.Email != "" {
+						ui.Text(c, u.Person.Email).FontSize(12).TextColor(p.Faint)
+					}
+				})
+			})
 		}
 	})
 }

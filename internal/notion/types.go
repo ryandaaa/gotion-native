@@ -40,7 +40,10 @@ type User struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Type   string `json:"type"`
-	Bot    *struct {
+	Person *struct {
+		Email string `json:"email"`
+	} `json:"person,omitempty"`
+	Bot *struct {
 		WorkspaceName   string `json:"workspace_name"`
 		WorkspaceLimits struct {
 			// MaxFileUploadSize is the largest file the workspace takes:

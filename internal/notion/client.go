@@ -20,6 +20,10 @@ const (
 	Version = "2026-03-11"
 )
 
+// DefaultBase is where new clients send their requests: Notion's API, or
+// what a test puts in its place so that it never reaches Notion.
+var DefaultBase = BaseURL
+
 // Client talks to Notion with one integration token.
 type Client struct {
 	Token string
@@ -41,7 +45,7 @@ type Client struct {
 }
 
 func New(token string) *Client {
-	return &Client{Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}, Base: BaseURL, rate: 2.8, burst: 8, tokens: 8}
+	return &Client{Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}, Base: DefaultBase, rate: 2.8, burst: 8, tokens: 8}
 }
 
 // Error is an error response from Notion.

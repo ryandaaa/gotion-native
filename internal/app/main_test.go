@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 	"testing"
+
+	"gotion/internal/notion"
 )
 
 // memSecrets keeps credentials in memory for the tests: none of them may
@@ -39,6 +41,9 @@ func (s *memSecrets) Delete(k string) error {
 
 func TestMain(m *testing.M) {
 	secrets = &memSecrets{m: map[string][]byte{}}
+	// Nor Notion itself: a client a test does not point at a fake goes
+	// nowhere.
+	notion.DefaultBase = "http://127.0.0.1:9/v1"
 	// Nor the user's settings, cache or token file.
 	dir, _ := os.MkdirTemp("", "gotion-test")
 	os.Setenv("XDG_CONFIG_HOME", dir)
