@@ -121,6 +121,9 @@ func FormatProperty(raw json.RawMessage) string {
 		if len(names) == len(v.Relation) {
 			return strings.Join(names, ", ")
 		}
+		if len(v.Relation) == 1 {
+			return tr.T("1 halaman")
+		}
 		return fmt.Sprintf(tr.T("%d halaman"), len(v.Relation))
 	case "files":
 		var names []string

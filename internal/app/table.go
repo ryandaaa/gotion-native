@@ -288,15 +288,48 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 		if t.loading && t.dsID != "" {
 			ui.Spinner(c).Size(12, 12)
 		}
-		ui.Text(c, fmt.Sprintf(tr.T("%d baris"), len(t.rows))).FontSize(12).TextColor(p.Faint)
-		a.queryButtons(c, t)
-		ui.Row(c).Gap(2).Padding(2).Radius(7).Background(p.Sidebar).Children(func() {
-			for _, v := range []struct{ id, label string }{
-				{"table", tr.T("Tabel")},
-				{"cards", tr.T("Kartu")},
-				{"board", tr.T("Board")},
-				{"calendar", tr.T("Kalender")},
-			} {
+		views := []struct{ id, label string }{
+			{"table", tr.T("Tabel")},
+			{"cards", tr.T("Kartu")},
+			{"board", tr.T("Board")},
+			{"calendar", tr.T("Kalender")},
+		}
+		pick := func(id string) {
+			prev := a.set.Views[t.id]
+			a.set.Views[t.id] = id
+			a.saveSettings()
+			if prev == "calendar" && id != "calendar" && t.cal.queriedKey != "" {
+				t.cal.queriedKey = ""
+				a.requery(t)
+			}
+		}
+		// A narrow panel (a split) has no room for all of it beside its
+		// tabs: the count goes, and the views fold into one menu.
+		narrow := pn.width > 0 && pn.width < 820
+		if !narrow {
+			ui.Text(c, fmt.Sprintf(tr.T("%d baris"), len(t.rows))).FontSize(12).TextColor(p.Faint).Shrink(0)
+		}
+		a.queryButtons(c, t, narrow)
+		if narrow {
+			labels := make([]string, len(views))
+			current := views[0].label
+			for k, v := range views {
+				labels[k] = v.label
+				if v.id == view {
+					current = v.label
+				}
+			}
+			if ui.Select(c.Key("view-menu"), &current, labels).Width(112).Shrink(0).Label(tr.T("Tampilan database")).Changed() {
+				for _, v := range views {
+					if v.label == current {
+						pick(v.id)
+					}
+				}
+			}
+			return
+		}
+		ui.Row(c).Gap(2).Padding(2).Radius(7).Background(p.Sidebar).Shrink(0).Children(func() {
+			for _, v := range views {
 				b := ui.Text(c.Key("view"+v.id), v.label).FontSize(12).Padding(3, 10).Radius(5).Cursor(ui.CursorPointer)
 				if view == v.id {
 					b.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
@@ -304,13 +337,7 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 					b.TextColor(p.Muted)
 				}
 				if b.Clicked() {
-					prev := a.set.Views[t.id]
-					a.set.Views[t.id] = v.id
-					a.saveSettings()
-					if prev == "calendar" && v.id != "calendar" && t.cal.queriedKey != "" {
-						t.cal.queriedKey = ""
-						a.requery(t)
-					}
+					pick(v.id)
 				}
 			}
 		})

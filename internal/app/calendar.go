@@ -705,8 +705,10 @@ func (a *App) renderCalendarGrid(
 								}
 								title := nonEmpty(pl.span.row.Title(), tr.T("Tanpa judul"))
 								ui.Text(c, title).FontSize(12).FontWeight(500).TextColor(fg).SingleLine().Grow(1).MinWidth(0)
-								if pl.span.dbTitle != "" && !pl.contLeft {
-									ui.Text(c, pl.span.dbTitle).FontSize(10).TextColor(p.Faint).SingleLine().Shrink(0)
+								// The database's name only where the title has room
+								// beside it, and it gives way first.
+								if pl.span.dbTitle != "" && !pl.contLeft && pl.colSpan >= 2 {
+									ui.Text(c, pl.span.dbTitle).FontSize(10).TextColor(p.Faint).SingleLine().Shrink(1).MinWidth(0).MaxWidth(120)
 								}
 							})
 							if bar.Clicked() && onOpen != nil {
@@ -732,7 +734,7 @@ func (a *App) calendarRowPill(c *ui.Context, cal *calendarState, sp calendarSpan
 		}
 		ui.Text(c, nonEmpty(sp.row.Title(), tr.T("Tanpa judul"))).FontSize(12).FontWeight(500).TextColor(fg).SingleLine().Grow(1).MinWidth(0)
 		if sp.dbTitle != "" {
-			ui.Text(c, sp.dbTitle).FontSize(10).TextColor(a.pal().Faint).SingleLine().Shrink(0)
+			ui.Text(c, sp.dbTitle).FontSize(10).TextColor(a.pal().Faint).SingleLine().Shrink(1).MinWidth(0).MaxWidth(120)
 		}
 	})
 	if row.Clicked() && onOpen != nil {

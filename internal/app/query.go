@@ -92,18 +92,29 @@ func filterable(p notion.Property) bool {
 }
 
 // queryButtons are the table header's Filter and Urutkan, with popovers.
-func (a *App) queryButtons(c *ui.Context, t *tableView) {
+// queryButtons are the filter and sort buttons; compact, on a narrow panel,
+// shows their icons alone, their labels as tooltips.
+func (a *App) queryButtons(c *ui.Context, t *tableView, compact bool) {
 	p := a.pal()
 	q := &t.query
 	button := func(key, label string, s *ui.SVG, on bool) ui.Element {
-		b := ui.Row(c.Key(key)).AlignItems(ui.Center).Gap(5).Padding(4, 8).Radius(6).Cursor(ui.CursorPointer)
+		b := ui.Row(c.Key(key)).AlignItems(ui.Center).Gap(5).Padding(4, 8).Radius(6).Cursor(ui.CursorPointer).Shrink(0)
+		if compact {
+			b.Tooltip(label).Label(label)
+		}
 		if on {
 			b.Background(p.EditBg)
 		} else if b.Hovered() {
 			b.Background(p.Hover)
 		}
 		b.Children(func() {
-			ui.Icon(c, s).Size(14, 14).TextColor(p.Muted)
+			ic := ui.Icon(c, s).Size(14, 14).TextColor(p.Muted)
+			if compact {
+				if on {
+					ic.TextColor(p.Accent)
+				}
+				return
+			}
 			t := ui.Text(c, label).FontSize(12)
 			if on {
 				t.TextColor(p.Accent).FontWeight(600)
