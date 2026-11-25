@@ -693,7 +693,10 @@ func (a *App) panelHeader(c *ui.Context, i int, s *ui.SVG, title, badge string, 
 		if right != nil {
 			right()
 		}
-		ui.Text(c, badge).FontSize(11).FontWeight(600).TextColor(p.Muted).Padding(2, 8).Background(p.Sidebar).Radius(6)
+		// The kind's badge only where the strip has room for it.
+		if pn := a.panels[i]; pn == nil || pn.width == 0 || pn.width >= 820 {
+			ui.Text(c, badge).FontSize(11).FontWeight(600).TextColor(p.Muted).Padding(2, 8).Background(p.Sidebar).Radius(6)
+		}
 		if a.panels[1] == nil {
 			if iconButton(c, p, iconSplit, tr.T("Belah panel")) {
 				if pn := a.panels[i]; pn != nil {

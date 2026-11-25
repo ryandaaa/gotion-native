@@ -23,3 +23,13 @@ html_handling = "drop-trailing-slash"
 # Set the integration's credentials as secrets, not here:
 #   npx wrangler secret put NOTION_CLIENT_ID
 #   npx wrangler secret put NOTION_CLIENT_SECRET
+
+# One Durable Object per workspace holds the apps' WebSockets and pushes them
+# the workspace's events as the webhook gives them (GET /live).
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "Workspace"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Workspace"]

@@ -1,6 +1,6 @@
 // node test.mjs — checks the Worker against a fake Notion.
 import assert from "node:assert/strict";
-import worker from "./src/index.js";
+import worker, { Workspace } from "./src/index.js";
 
 const kv = new Map();
 const env = {
@@ -164,5 +164,68 @@ r = await bare.fetch(new Request("https://w.example/download/windows"), { ...env
 assert.equal(r.status, 302);
 assert.equal(r.headers.get("Location"), "https://github.com/me/gotion/releases/latest");
 Date.now = realNow;
+
+// live: the webhook pushes each event to the workspace's Durable Object, and
+// /live hands a token's app a socket of its own workspace only.
+const published = [];
+const connects = [];
+let liveDown = false;
+const liveEnv = {
+  ...env,
+  LIVE: {
+    idFromName: (n) => "id:" + n,
+    get: (id) => ({
+      fetch: async (req, init) => {
+        if (liveDown) throw new Error("object unreachable");
+        const u = typeof req === "string" ? req : req.url;
+        if (u.endsWith("/publish")) published.push({ id, event: JSON.parse(init.body) });
+        else connects.push(id);
+        return new Response("ok");
+      },
+    }),
+  },
+};
+const lcall = (path, init) => worker.fetch(new Request("https://w.example" + path, init), liveEnv);
+body = JSON.stringify({ id: "9", workspace_id: "ws-A", type: "page.content_updated", timestamp: "2026-11-24T10:05:00Z",
+  entity: { id: "pg", type: "page" }, data: { parent: { id: "root", type: "page" }, updated_blocks: [{ id: "b1", type: "block" }] } });
+r = await lcall("/webhook", { method: "POST", body, headers: { "X-Notion-Signature": await sign(body) } });
+assert.equal(r.status, 200);
+assert.equal(published.length, 1);
+assert.equal(published[0].id, "id:ws-A", "pushed to its own workspace's object");
+assert.deepEqual(published[0].event.data.updated_blocks, [{ id: "b1", type: "block" }], "the changed blocks travel");
+got = await (await lcall("/events?since=2026-11-24T10:04:00Z", { headers: { Authorization: "Bearer tok-A" } })).json();
+assert.deepEqual(got.events.map((e) => e.id), ["9"], "and kept in KV for the apps that poll");
+
+// The object unreachable: the event is still kept, the webhook still 200.
+liveDown = true;
+body = JSON.stringify({ id: "10", workspace_id: "ws-A", type: "page.created", timestamp: "2026-11-24T10:06:00Z", entity: { id: "p10", type: "page" } });
+r = await lcall("/webhook", { method: "POST", body, headers: { "X-Notion-Signature": await sign(body) } });
+assert.equal(r.status, 200, "a failed push never fails the webhook");
+got = await (await lcall("/events?since=2026-11-24T10:05:30Z", { headers: { Authorization: "Bearer tok-A" } })).json();
+assert.deepEqual(got.events.map((e) => e.id), ["10"]);
+liveDown = false;
+
+const up = { Upgrade: "websocket" };
+assert.equal((await lcall("/live", { headers: { ...up } })).status, 401, "no token, no socket");
+assert.equal((await lcall("/live", { headers: { ...up, Authorization: "Bearer stolen" } })).status, 401);
+assert.equal((await lcall("/live", { headers: { Authorization: "Bearer tok-A" } })).status, 426, "a WebSocket upgrade only");
+r = await lcall("/live", { headers: { ...up, Authorization: "Bearer tok-A" } });
+assert.deepEqual(connects, ["id:ws-A"], "the token's own workspace");
+assert.equal((await call("/live", { headers: { ...up, Authorization: "Bearer tok-A" } })).status, 404, "no LIVE: the app polls");
+
+// The object: it pushes to every socket, skips a broken one, and refuses
+// sockets past its limit.
+const sockets = [];
+const sock = (broken) => ({ got: [], send(m) { if (broken) throw new Error("gone"); this.got.push(m); } });
+const ws = new Workspace({ getWebSockets: () => sockets, acceptWebSocket: () => {}, setWebSocketAutoResponse: () => {} }, {});
+sockets.push(sock(false), sock(true), sock(false));
+r = await ws.fetch(new Request("https://live/publish", { method: "POST", body: '{"id":"x"}' }));
+assert.deepEqual(await r.json(), { sent: 2 });
+assert.deepEqual(sockets[0].got, ['{"id":"x"}']);
+while (sockets.length < 32) sockets.push(sock(false));
+assert.equal((await ws.fetch(new Request("https://live/connect"))).status, 429, "too many sockets");
+const pinged = sock(false);
+ws.webSocketMessage(pinged, "ping");
+assert.deepEqual(pinged.got, ["pong"]);
 
 console.log("worker: all checks passed");

@@ -483,7 +483,10 @@ var en = map[string]string{
 	"Sambungkan workspace Notion-mu. Yang kamu ketik di sini sampai ke Notion beberapa detik kemudian.": "Connect your Notion workspace. What you type here reaches Notion a few seconds later.",
 	"Browser sudah terbuka. Selesaikan di sana, lalu kembali ke sini.":                                  "Your browser is open. Finish there, then come back here.",
 	"Centang halaman yang boleh dibuka gotion":                                                          "Tick the pages gotion may open",
-	"Klik Allow access": "Click Allow access",
-	"Menunggu Notion…":  "Waiting for Notion…",
-	"Kembali":           "Back",
+	"Klik Allow access":  "Click Allow access",
+	"Menunggu Notion…":   "Waiting for Notion…",
+	"Kembali":            "Back",
+	"1 halaman":          "1 page",
+	"kamu, lewat gotion": "you, through gotion",
+	"Tampilan database":  "Database view",
 }

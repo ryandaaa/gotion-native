@@ -363,6 +363,10 @@ func (a *App) rightPanePage(c *ui.Context, pn *panel) {
 			})
 		}
 		infoRow(tr.T("Diubah"), editedLabel)
+		if a.bot != nil && editorID != "" && editorID == a.bot.ID {
+			// Notion names the integration for what gotion sent.
+			editorName = tr.T("kamu, lewat gotion")
+		}
 		infoRow(tr.T("Oleh"), editorName)
 		lenStr := fmt.Sprintf(tr.T("%d kata"), words)
 		if mins > 0 {
