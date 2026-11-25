@@ -42,9 +42,11 @@ func (s Status) String() string {
 }
 
 const (
-	idle     = 1500 * time.Millisecond // send after this long without typing
-	maxDelay = 5 * time.Second         // or after this long typing
-	poll     = 15 * time.Second        // look for changes made elsewhere
+	// Sent soon after a pause, so another device sees it almost as typed,
+	// yet not per keystroke: Notion allows about three requests a second.
+	idle     = 600 * time.Millisecond // send after this long without typing
+	maxDelay = 3 * time.Second        // or after this long typing
+	poll     = 15 * time.Second       // look for changes made elsewhere
 	// After a failed send the next try waits longer each time, up to this.
 	maxBackoff = 30 * time.Second
 	// closeWait is how long closing a page tries to send what is left.

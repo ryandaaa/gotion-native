@@ -10,25 +10,30 @@
 //   POST /webhook               <- Notion's events, signed; kept a while
 //   GET  /events?since=T        -> a workspace's events since T, for the
 //                                  app holding one of its tokens
+//   GET  /live                  -> a WebSocket the workspace's events are
+//                                  pushed down as they come (Durable Object
+//                                  Workspace, one per workspace)
 //   GET  /download/<kind>       -> the newest release's file of that kind,
 //                                  on GitHub (GITHUB_REPO)
 //
 // Secrets: NOTION_CLIENT_ID, NOTION_CLIENT_SECRET (wrangler secret put).
 // KV: EVENTS, for the webhook's verification token, the events and which
-// workspace a token belongs to.
+// workspace a token belongs to. Durable Objects: LIVE, the open sockets of
+// each workspace.
 
 const NOTION = "https://api.notion.com/v1";
 const VERSION = "2026-03-11";
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/login" && request.method === "GET") return login(url, env);
       if (url.pathname === "/callback" && request.method === "GET") return await callback(url, env);
       if (url.pathname === "/refresh" && request.method === "POST") return await refresh(request, env);
-      if (url.pathname === "/webhook" && request.method === "POST") return await webhook(request, env);
+      if (url.pathname === "/webhook" && request.method === "POST") return await webhook(request, env, ctx);
       if (url.pathname === "/events" && request.method === "GET") return await events(request, url, env);
+      if (url.pathname === "/live" && request.method === "GET") return await live(request, env);
       if (url.pathname.startsWith("/download/") && request.method === "GET") return await download(url, env);
       return new Response("gotion OAuth", { status: 404 });
     } catch (e) {
@@ -160,7 +165,7 @@ function same(a, b) {
 // its verification token: kept (read it with wrangler kv key get, and
 // paste it in Notion), and from then on every event must be signed with
 // it, an HMAC of the raw body.
-async function webhook(request, env) {
+async function webhook(request, env, ctx) {
   const raw = await request.text();
   let body;
   try {
@@ -185,17 +190,26 @@ async function webhook(request, env) {
   }
   if (!body.workspace_id || !body.type) return new Response("ok");
   const key = "ev:" + body.workspace_id;
+  const data = body.data || {};
+  const event = {
+    id: body.id,
+    type: body.type,
+    timestamp: body.timestamp,
+    entity: body.entity,
+    parent: data.parent,
+    // What the app needs to fetch only what changed: the page's changed
+    // blocks, and the page a comment is on.
+    data: { parent: data.parent, page_id: data.page_id, updated_blocks: data.updated_blocks },
+    authors: body.authors,
+  };
+  // Pushed first, to the sockets open now: this is the fast path. KV, the
+  // slow one, stays for the apps that ask (/events) and for a socket that
+  // was down.
+  const push = publish(env, body.workspace_id, event);
+  if (ctx && ctx.waitUntil) ctx.waitUntil(push);
+  else await push;
   const list = JSON.parse((await env.EVENTS.get(key)) || "[]");
-  if (!list.some((e) => e.id === body.id)) {
-    list.push({
-      id: body.id,
-      type: body.type,
-      timestamp: body.timestamp,
-      entity: body.entity,
-      parent: body.data && body.data.parent,
-      authors: body.authors,
-    });
-  }
+  if (!list.some((e) => e.id === body.id)) list.push(event);
   list.sort((a, b) => (a.timestamp < b.timestamp ? -1 : 1));
   await env.EVENTS.put(key, JSON.stringify(list.slice(-KEEP)), { expirationTtl: EVENT_TTL });
   return new Response("ok");
@@ -205,22 +219,114 @@ async function webhook(request, env) {
 // the one its Notion token belongs to, as Notion says (GET /users/me), so
 // no token reads another workspace's events.
 async function events(request, url, env) {
+  const { workspace, error } = await workspaceOf(request, env);
+  if (error) return error;
+  const since = url.searchParams.get("since") || "";
+  const list = JSON.parse((await env.EVENTS.get("ev:" + workspace)) || "[]");
+  return Response.json({ events: list.filter((e) => !since || e.timestamp > since), now: new Date().toISOString() });
+}
+
+// workspaceOf finds the workspace the request's Notion token belongs to, as
+// Notion says (GET /users/me), cached a while by the token's hash.
+async function workspaceOf(request, env) {
   const auth = request.headers.get("Authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token) return Response.json({ error: "token missing" }, { status: 401 });
+  if (!token) return { error: Response.json({ error: "token missing" }, { status: 401 }) };
   const cacheKey = "auth:" + (await sha256Hex(token));
   let workspace = await env.EVENTS.get(cacheKey);
   if (!workspace) {
     const res = await fetch(NOTION + "/users/me", { headers: { Authorization: "Bearer " + token, "Notion-Version": VERSION } });
-    if (!res.ok) return Response.json({ error: "token refused" }, { status: 401 });
+    if (!res.ok) return { error: Response.json({ error: "token refused" }, { status: 401 }) };
     const me = await res.json();
     workspace = me.bot && me.bot.workspace_id;
-    if (!workspace) return Response.json({ error: "no workspace" }, { status: 401 });
+    if (!workspace) return { error: Response.json({ error: "no workspace" }, { status: 401 }) };
     await env.EVENTS.put(cacheKey, workspace, { expirationTtl: 600 });
   }
-  const since = url.searchParams.get("since") || "";
-  const list = JSON.parse((await env.EVENTS.get("ev:" + workspace)) || "[]");
-  return Response.json({ events: list.filter((e) => !since || e.timestamp > since), now: new Date().toISOString() });
+  return { workspace };
+}
+
+// live hands the app a WebSocket of its workspace's events: the socket is
+// the workspace's Durable Object's, which pushes each event as the webhook
+// gives it. No LIVE binding (an older deploy): 404, and the app polls.
+async function live(request, env) {
+  if (!env.LIVE) return new Response("no live events here", { status: 404 });
+  if ((request.headers.get("Upgrade") || "").toLowerCase() !== "websocket") {
+    return new Response("a WebSocket, please", { status: 426 });
+  }
+  const { workspace, error } = await workspaceOf(request, env);
+  if (error) return error;
+  const stub = env.LIVE.get(env.LIVE.idFromName(workspace));
+  return stub.fetch(new Request("https://live/connect", request));
+}
+
+// publish sends an event to the workspace's open sockets. A failure only
+// costs speed: the app's polling finds the event in KV.
+async function publish(env, workspace, event) {
+  if (!env.LIVE) return;
+  try {
+    const stub = env.LIVE.get(env.LIVE.idFromName(workspace));
+    await stub.fetch("https://live/publish", { method: "POST", body: JSON.stringify(event) });
+  } catch {}
+}
+
+// MAX_SOCKETS bounds one workspace's open sockets, so that a client gone
+// wrong, reconnecting without end, can't run up the bill.
+const MAX_SOCKETS = 32;
+
+// Workspace is a Durable Object per workspace: it holds the apps' sockets
+// and pushes them its events. Its sockets hibernate between events, so an
+// idle connection costs next to nothing; a "ping" is answered "pong" without
+// waking it.
+export class Workspace {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    if (typeof WebSocketRequestResponsePair !== "undefined") {
+      state.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    }
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === "/publish" && request.method === "POST") {
+      const msg = await request.text();
+      let sent = 0;
+      for (const ws of this.state.getWebSockets()) {
+        try {
+          ws.send(msg);
+          sent++;
+        } catch {}
+      }
+      return Response.json({ sent });
+    }
+    if (url.pathname === "/connect") {
+      if (this.state.getWebSockets().length >= MAX_SOCKETS) {
+        return new Response("too many connections", { status: 429 });
+      }
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      this.state.acceptWebSocket(server);
+      server.send(JSON.stringify({ type: "hello", now: new Date().toISOString() }));
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    return new Response("not found", { status: 404 });
+  }
+
+  webSocketMessage(ws, message) {
+    if (message === "ping") ws.send("pong");
+  }
+
+  webSocketClose(ws, code) {
+    try {
+      ws.close(code === 1005 ? 1000 : code, "bye");
+    } catch {}
+  }
+
+  webSocketError(ws) {
+    try {
+      ws.close(1011, "error");
+    } catch {}
+  }
 }
 
 // The files of a release, by what the website calls them. Their names are
