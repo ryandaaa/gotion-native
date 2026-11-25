@@ -290,29 +290,69 @@ func (a *App) addRow(c *ui.Context, i int, t *tableView) {
 		return
 	}
 	ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 8).Children(func() {
-		in := ui.TextInput(c, &n.title).Placeholder(tr.T("Judul baris baru")).AutoFocus().Grow(1).Label(tr.T("Judul")).Disabled(n.busy)
-		if in.Submitted() && !n.busy {
-			a.createRow(i, t)
-		}
-		if len(t.templates) > 0 && !n.busy {
-			names := []string{tr.T("Tanpa template")}
-			for _, tp := range t.templates {
-				names = append(names, nonEmpty(tp.Name, "Template"))
-			}
-			choice := nonEmpty(n.template, tr.T("Tanpa template"))
-			if ui.Select(c, &choice, names).Width(180).Label("Template").Changed() {
-				n.template = choice
-				if choice == tr.T("Tanpa template") {
-					n.template = ""
-				}
-			}
-		}
-		if n.busy {
-			ui.Spinner(c).Size(14, 14)
-		} else if a.btn(c, tr.T("Batal"), nil, false, false) {
-			*n = newRow{}
-		}
+		a.addRowForm(c, i, t, false)
 	})
+}
+
+// addCard is the card at the end of the cards grid that adds a row.
+func (a *App) addCard(c *ui.Context, i int, t *tableView) {
+	p := a.pal()
+	n := &t.adding
+	if !n.open {
+		b := ui.Row(c.Key("add-card")).Width(250).Gap(8).Padding(14, 16).Radius(10).
+			AlignItems(ui.Center).Border(1, p.Line).Cursor(ui.CursorPointer)
+		if b.Hovered() {
+			b.Background(p.Hover)
+		}
+		b.Children(func() {
+			ui.Icon(c, iconPlus).Size(14, 14).TextColor(p.Faint)
+			ui.Text(c, tr.T("Baris baru")).FontSize(14).TextColor(p.Muted)
+		})
+		if b.Clicked() {
+			*n = newRow{open: true}
+			a.loadTemplates(t)
+		}
+		return
+	}
+	ui.Column(c.Key("add-card-form")).Width(250).Gap(8).Padding(14, 16).Radius(10).
+		Background(p.Panel).Border(1, p.EditLine).Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.12)).Children(func() {
+		a.addRowForm(c, i, t, true)
+	})
+}
+
+// addRowForm renders the inline title input, optional template picker, and
+// cancel/busy controls shared by addRow and addCard.
+func (a *App) addRowForm(c *ui.Context, i int, t *tableView, stacked bool) {
+	n := &t.adding
+	in := ui.TextInput(c, &n.title).Placeholder(tr.T("Judul baris baru")).AutoFocus().Label(tr.T("Judul")).Disabled(n.busy)
+	if !stacked {
+		in.Grow(1)
+	}
+	if in.Submitted() && !n.busy {
+		a.createRow(i, t)
+	}
+	if len(t.templates) > 0 && !n.busy {
+		names := []string{tr.T("Tanpa template")}
+		for _, tp := range t.templates {
+			names = append(names, nonEmpty(tp.Name, "Template"))
+		}
+		choice := nonEmpty(n.template, tr.T("Tanpa template"))
+		sel := ui.Select(c, &choice, names).Label("Template")
+		if !stacked {
+			sel.Width(180)
+		}
+		if sel.Changed() {
+			n.template = choice
+			if choice == tr.T("Tanpa template") {
+				n.template = ""
+			}
+		}
+	}
+	if n.busy {
+		ui.Spinner(c).Size(14, 14)
+	} else if a.btn(c, tr.T("Batal"), nil, false, false) {
+		*n = newRow{}
+	}
 }
 
 func (a *App) createRow(i int, t *tableView) {

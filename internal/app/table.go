@@ -78,8 +78,17 @@ func (a *App) openTable(pn *panel, n *node) {
 				t.err = errText(err)
 				return
 			}
-			for _, p := range ds.Properties {
+			for name, p := range ds.Properties {
+				if p.Name == "" {
+					p.Name = name
+				}
+				if p.Type == "" {
+					continue
+				}
 				t.columns = append(t.columns, p)
+			}
+			if len(t.columns) == 0 {
+				t.columns = []notion.Property{{Name: "Name", Type: "title"}}
 			}
 			// The title first, then by name.
 			sort.Slice(t.columns, func(i, j int) bool {
@@ -322,12 +331,6 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 			a.sendTableTitle(t)
 		}
 	})
-	if len(t.rows) == 0 && len(t.query.conds) == 0 {
-		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, tr.T("Database ini masih kosong")).FontSize(14).TextColor(p.Faint)
-		})
-		return
-	}
 	if view == "cards" {
 		a.cards(c, i, t)
 		return
@@ -338,6 +341,9 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 // grid is the table view: a header that stays, rows that open their page.
 func (a *App) grid(c *ui.Context, i int, t *tableView) {
 	p := a.pal()
+	if len(t.columns) == 0 {
+		t.columns = []notion.Property{{Name: "Name", Type: "title"}}
+	}
 	var total float32
 	for _, col := range t.columns {
 		total += colWidth(col)
@@ -351,56 +357,61 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 		return e
 	}
 	ui.ScrollBoth(c).Grow(1).MinHeight(0).Margin(12, 24, 16, 24).Children(func() {
-		ui.Column(c).Width(total).Border(1, p.Line).Radius(8).Clip().Children(func() {
-			// The header stays at the top as the rows scroll.
-			ui.Row(c).Sticky().Top(0).ZIndex(2).Background(p.Sidebar).BorderWidth(0, 0, 1, 0).BorderColor(p.Line).Children(func() {
-				for _, col := range t.columns {
-					a.headerCell(c, t, col, cellOf("h"+col.Name, col, false))
-				}
-				a.addColumn(c, t)
-			})
-			for k, r := range t.rows {
-				row := ui.Row(c.Key("row"+r.ID)).BorderWidth(0, 0, 1, 0).BorderColor(p.Line)
-				row.Children(func() {
-					for j, col := range t.columns {
-						e := cellOf("c"+col.Name, col, j == len(t.columns)-1)
-						if col.Type == "title" {
-							// The title opens the row as a page.
-							e.Cursor(ui.CursorPointer)
-							if e.Hovered() {
-								e.Background(p.Hover)
-							}
-							e.Children(func() {
-								if em := r.Emoji(); em != "" {
-									emoji.View(c, em, 16).MarginEnd(6)
-								} else {
-									ui.Icon(c, iconPage).Size(14, 14).TextColor(p.Faint).MarginEnd(6)
+		ui.Column(c).Gap(10).AlignItems(ui.Start).Children(func() {
+			ui.Column(c).Width(total).Border(1, p.Line).Radius(8).Clip().Children(func() {
+				// The header stays at the top as the rows scroll.
+				ui.Row(c).Sticky().Top(0).ZIndex(2).Background(p.Sidebar).BorderWidth(0, 0, 1, 0).BorderColor(p.Line).Children(func() {
+					for _, col := range t.columns {
+						a.headerCell(c, t, col, cellOf("h"+col.Name, col, false))
+					}
+					a.addColumn(c, t)
+				})
+				for k, r := range t.rows {
+					row := ui.Row(c.Key("row"+r.ID)).BorderWidth(0, 0, 1, 0).BorderColor(p.Line)
+					row.Children(func() {
+						for j, col := range t.columns {
+							e := cellOf("c"+col.Name, col, j == len(t.columns)-1)
+							if col.Type == "title" {
+								// The title opens the row as a page.
+								e.Cursor(ui.CursorPointer)
+								if e.Hovered() {
+									e.Background(p.Hover)
 								}
-								ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(14).FontWeight(500).SingleLine().MinWidth(0)
-							})
-							if e.Clicked() {
-								a.openRow(i, t, r)
-							}
-							e.ContextMenu(func(m *ui.Menu) {
-								if m.Item(tr.T("Buka")).Chosen() {
+								e.Children(func() {
+									if em := r.Emoji(); em != "" {
+										emoji.View(c, em, 16).MarginEnd(6)
+									} else {
+										ui.Icon(c, iconPage).Size(14, 14).TextColor(p.Faint).MarginEnd(6)
+									}
+									ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(14).FontWeight(500).SingleLine().MinWidth(0)
+								})
+								if e.Clicked() {
 									a.openRow(i, t, r)
 								}
-								if m.Item(tr.T("Buka di samping")).Chosen() {
-									a.openRow(-1, t, r)
-								}
-								m.Separator()
-								if m.Item(tr.T("Buang ke sampah")).Chosen() {
-									a.trashRow(t, r)
-								}
-							})
-							continue
+								e.ContextMenu(func(m *ui.Menu) {
+									if m.Item(tr.T("Buka")).Chosen() {
+										a.openRow(i, t, r)
+									}
+									if m.Item(tr.T("Buka di samping")).Chosen() {
+										a.openRow(-1, t, r)
+									}
+									m.Separator()
+									if m.Item(tr.T("Buang ke sampah")).Chosen() {
+										a.trashRow(t, r)
+									}
+								})
+								continue
+							}
+							a.editable(c, t, r, col, e, func() { a.value(c, r.Properties[col.Name], col.Type) })
 						}
-						a.editable(c, t, r, col, e, func() { a.value(c, r.Properties[col.Name], col.Type) })
-					}
-				})
-				_ = k
+					})
+					_ = k
+				}
+				a.addRow(c, i, t)
+			})
+			if len(t.rows) == 0 && len(t.query.conds) == 0 {
+				ui.Text(c, tr.T("Database ini masih kosong")).FontSize(13).TextColor(p.Faint).Padding(0, 4)
 			}
-			a.addRow(c, i, t)
 		})
 	})
 }
@@ -410,7 +421,7 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 func (a *App) cards(c *ui.Context, i int, t *tableView) {
 	p := a.pal()
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-		ui.Row(c).Wrap().Gap(14).Padding(12, 24, 24, 24).AlignItems(ui.Start).Children(func() {
+		ui.Row(c).Wrap().Gap(14).Padding(12, 24, 16, 24).AlignItems(ui.Start).Children(func() {
 			for _, r := range t.rows {
 				card := ui.Column(c.Key("card"+r.ID)).Width(250).Gap(10).Padding(14, 16).Radius(10).
 					Background(p.Panel).Cursor(ui.CursorPointer)
@@ -446,7 +457,11 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 					a.openRow(i, t, r)
 				}
 			}
+			a.addCard(c, i, t)
 		})
+		if len(t.rows) == 0 && len(t.query.conds) == 0 {
+			ui.Text(c, tr.T("Database ini masih kosong")).FontSize(13).TextColor(p.Faint).Padding(0, 24, 16, 24)
+		}
 	})
 }
 

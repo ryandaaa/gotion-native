@@ -328,3 +328,59 @@ func TestEditDateWithCalendar(t *testing.T) {
 		t.Errorf("sent:\n%s", rec.all())
 	}
 }
+
+func TestEmptyDatabaseTable(t *testing.T) {
+	_, tv, rec, tester := editApp(t)
+	tv.rows = nil
+	tv.columns = nil
+	tester.Frame()
+
+	for _, want := range []string{"Name", "Kolom baru", "Baris baru", "Database ini masih kosong"} {
+		if _, ok := tester.Find(want); !ok {
+			t.Fatalf("missing %q in empty table; texts: %v", want, tester.Texts())
+		}
+	}
+	if err := tester.Click("Baris baru"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	tester.Type("Baris Pertama")
+	tester.Key(0, ui.KeyEnter)
+	if !waitSent(rec, `"content":"Baris Pertama"`) {
+		t.Fatalf("sent:\n%s", rec.all())
+	}
+	for i := 0; i < 40 && len(tv.rows) < 1; i++ {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(tv.rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(tv.rows))
+	}
+}
+
+func TestEmptyDatabaseCards(t *testing.T) {
+	a, tv, rec, tester := editApp(t)
+	tv.rows = nil
+	a.set.Views = map[string]string{"tasks": "cards"}
+	tester.Frame()
+
+	for _, want := range []string{"Baris baru", "Database ini masih kosong"} {
+		if _, ok := tester.Find(want); !ok {
+			t.Fatalf("missing %q in empty cards; texts: %v", want, tester.Texts())
+		}
+	}
+	if err := tester.Click("Baris baru"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	tester.Type("Kartu Pertama")
+	tester.Key(0, ui.KeyEnter)
+	if !waitSent(rec, `"content":"Kartu Pertama"`) {
+		t.Fatalf("sent:\n%s", rec.all())
+	}
+	for i := 0; i < 40 && len(tv.rows) < 1; i++ {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(tv.rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(tv.rows))
+	}
+}
