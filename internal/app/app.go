@@ -236,8 +236,10 @@ type settings struct {
 	Wash         string          `json:"wash"`    // the color behind the cards
 	Trashed      []trashed       `json:"trashed"` // pages put in the trash from gotion
 	Glass        bool            `json:"glass"`   // the system's glass behind them
-	// Views is how each database shows: "table" or "cards".
+	// Views is how each database shows: "table", "cards" or "board".
 	Views map[string]string `json:"views"`
+	// BoardGroup is the status/select column each database groups its board by.
+	BoardGroup map[string]string `json:"boardGroup"`
 	// Language is "id" or "en", or "" to follow the system's.
 	Language string `json:"language"`
 }
@@ -258,6 +260,9 @@ func loadSettings() settings {
 	}
 	if s.Views == nil {
 		s.Views = map[string]string{}
+	}
+	if s.BoardGroup == nil {
+		s.BoardGroup = map[string]string{}
 	}
 	if s.SidebarWidth < 200 {
 		s.SidebarWidth = 270

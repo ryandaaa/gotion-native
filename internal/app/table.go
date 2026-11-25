@@ -34,6 +34,7 @@ type tableView struct {
 	templatesAsked bool
 	columns        []notion.Property
 	rows           []*notion.Page
+	boardMoved     map[string]int // frame countdown for smooth card entrance
 	loading        bool
 	err            string
 }
@@ -284,7 +285,7 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 		ui.Text(c, fmt.Sprintf(tr.T("%d baris"), len(t.rows))).FontSize(12).TextColor(p.Faint)
 		a.queryButtons(c, t)
 		ui.Row(c).Gap(2).Padding(2).Radius(7).Background(p.Sidebar).Children(func() {
-			for _, v := range []struct{ id, label string }{{"table", tr.T("Tabel")}, {"cards", tr.T("Kartu")}} {
+			for _, v := range []struct{ id, label string }{{"table", tr.T("Tabel")}, {"cards", tr.T("Kartu")}, {"board", tr.T("Board")}} {
 				b := ui.Text(c.Key("view"+v.id), v.label).FontSize(12).Padding(3, 10).Radius(5).Cursor(ui.CursorPointer)
 				if view == v.id {
 					b.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
@@ -331,11 +332,14 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 			a.sendTableTitle(t)
 		}
 	})
-	if view == "cards" {
+	switch view {
+	case "cards":
 		a.cards(c, i, t)
-		return
+	case "board":
+		a.board(c, i, t)
+	default:
+		a.grid(c, i, t)
 	}
-	a.grid(c, i, t)
 }
 
 // grid is the table view: a header that stays, rows that open their page.
@@ -423,39 +427,7 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Row(c).Wrap().Gap(14).Padding(12, 24, 16, 24).AlignItems(ui.Start).Children(func() {
 			for _, r := range t.rows {
-				card := ui.Column(c.Key("card"+r.ID)).Width(250).Gap(10).Padding(14, 16).Radius(10).
-					Background(p.Panel).Cursor(ui.CursorPointer)
-				if card.Hovered() {
-					card.Border(1, p.EditLine).Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.12))
-				} else {
-					card.Border(1, p.Line).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.05))
-				}
-				own := false // a click on a property edits it, not opens the page
-				card.Children(func() {
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						if e := r.Emoji(); e != "" {
-							emoji.View(c, e, 18)
-						}
-						ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(15).FontWeight(600).MaxLines(2).MinWidth(0)
-					})
-					shown := 0
-					for _, col := range t.columns {
-						raw := r.Properties[col.Name]
-						if col.Type == "title" || shown >= 4 || !hasValue(raw) {
-							continue
-						}
-						shown++
-						ui.Text(c, col.Name).FontSize(11).TextColor(p.Faint).SingleLine()
-						box := ui.Row(c.Key("v"+col.Name)).Padding(2, 4).Margin(-2, -4, 0, -4).Radius(5).MinHeight(22).AlignItems(ui.Center)
-						if a.editable(c, t, r, col, box, func() { a.value(c, raw, col.Type) }) {
-							own = true
-						}
-					}
-					ui.Text(c, tr.T("Diubah ")+ago(r.LastEditedTime)).FontSize(11).TextColor(p.Faint)
-				})
-				if card.Clicked() && !own && !t.edit.open {
-					a.openRow(i, t, r)
-				}
+				a.rowCard(c, i, t, r, 250)
 			}
 			a.addCard(c, i, t)
 		})
@@ -463,6 +435,46 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 			ui.Text(c, tr.T("Database ini masih kosong")).FontSize(13).TextColor(p.Faint).Padding(0, 24, 16, 24)
 		}
 	})
+}
+
+// rowCard draws a card for row r (used by both cards and board views) and
+// returns its element so callers can attach drag/pose behavior.
+func (a *App) rowCard(c *ui.Context, i int, t *tableView, r *notion.Page, width float32) ui.Element {
+	p := a.pal()
+	card := ui.Column(c.Key("card"+r.ID)).Width(width).Gap(10).Padding(14, 16).Radius(10).
+		Background(p.Panel).Cursor(ui.CursorPointer)
+	if card.Hovered() {
+		card.Border(1, p.EditLine).Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.12))
+	} else {
+		card.Border(1, p.Line).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.05))
+	}
+	own := false // a click on a property edits it, not opens the page
+	card.Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			if e := r.Emoji(); e != "" {
+				emoji.View(c, e, 18)
+			}
+			ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(15).FontWeight(600).MaxLines(2).MinWidth(0)
+		})
+		shown := 0
+		for _, col := range t.columns {
+			raw := r.Properties[col.Name]
+			if col.Type == "title" || shown >= 4 || !hasValue(raw) {
+				continue
+			}
+			shown++
+			ui.Text(c, col.Name).FontSize(11).TextColor(p.Faint).SingleLine()
+			box := ui.Row(c.Key("v"+col.Name)).Padding(2, 4).Margin(-2, -4, 0, -4).Radius(5).MinHeight(22).AlignItems(ui.Center)
+			if a.editable(c, t, r, col, box, func() { a.value(c, raw, col.Type) }) {
+				own = true
+			}
+		}
+		ui.Text(c, tr.T("Diubah ")+ago(r.LastEditedTime)).FontSize(11).TextColor(p.Faint)
+	})
+	if card.Clicked() && !own && !t.edit.open {
+		a.openRow(i, t, r)
+	}
+	return card
 }
 
 // propIcon is the icon of a property type, as Notion heads its columns.

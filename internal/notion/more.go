@@ -273,9 +273,18 @@ type Template struct {
 // CreateRowFrom makes a row from a template (template "" for none): Notion
 // fills its content in after it answers.
 func (c *Client) CreateRowFrom(ctx context.Context, dataSource, prop, title, template string) (*Page, error) {
+	return c.CreateRowWith(ctx, dataSource, prop, title, template, nil)
+}
+
+// CreateRowWith makes a row with optional extra initial property values.
+func (c *Client) CreateRowWith(ctx context.Context, dataSource, prop, title, template string, extra map[string]any) (*Page, error) {
+	props := map[string]any{prop: titleValue(title)}
+	for k, v := range extra {
+		props[k] = v
+	}
 	body := map[string]any{
 		"parent":     map[string]any{"type": "data_source_id", "data_source_id": dataSource},
-		"properties": map[string]any{prop: titleValue(title)},
+		"properties": props,
 	}
 	if template != "" {
 		body["template"] = map[string]any{"type": "template_id", "template_id": template}

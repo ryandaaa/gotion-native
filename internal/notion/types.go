@@ -363,10 +363,12 @@ func (c *Client) DeleteBlock(ctx context.Context, id string) error {
 // Property is a column of a data source. Options are the choices of a
 // select, status or multi-select.
 type Property struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Type    string   `json:"type"`
-	Options []Option `json:"-"`
+	ID      string        `json:"id"`
+	Name    string        `json:"name"`
+	Type    string        `json:"type"`
+	Options []Option      `json:"-"`
+	Groups  []StatusGroup `json:"-"`
+	ordered []Option      `json:"-"`
 	// Target is the data source a relation's pages come from.
 	Target string `json:"-"`
 }
@@ -377,6 +379,14 @@ type Option struct {
 	Color string `json:"color"`
 }
 
+// StatusGroup is a group of status options (To-do, In progress, Complete).
+type StatusGroup struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Color     string   `json:"color"`
+	OptionIDs []string `json:"option_ids"`
+}
+
 func (p *Property) UnmarshalJSON(b []byte) error {
 	type plain Property
 	if err := json.Unmarshal(b, (*plain)(p)); err != nil {
@@ -385,10 +395,26 @@ func (p *Property) UnmarshalJSON(b []byte) error {
 	var m map[string]json.RawMessage
 	json.Unmarshal(b, &m)
 	var choices struct {
-		Options []Option `json:"options"`
+		Options []struct {
+			ID    string `json:"id"`
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		} `json:"options"`
+		Groups []StatusGroup `json:"groups"`
 	}
 	if raw, ok := m[p.Type]; ok && json.Unmarshal(raw, &choices) == nil {
-		p.Options = choices.Options
+		p.Groups = choices.Groups
+		byID := map[string]Option{}
+		for _, o := range choices.Options {
+			opt := Option{Name: o.Name, Color: o.Color}
+			p.Options = append(p.Options, opt)
+			if o.ID != "" {
+				byID[o.ID] = opt
+			}
+		}
+		if p.Type == "status" && len(p.Groups) > 0 {
+			p.ordered = orderStatusOptions(p.Options, p.Groups, byID)
+		}
 	}
 	if p.Type == "relation" {
 		var rel struct {
@@ -398,6 +424,52 @@ func (p *Property) UnmarshalJSON(b []byte) error {
 		p.Target = rel.DataSourceID
 	}
 	return nil
+}
+
+func orderStatusOptions(opts []Option, groups []StatusGroup, byID map[string]Option) []Option {
+	rank := func(name string) int {
+		switch strings.ToLower(name) {
+		case "to-do", "to do":
+			return 0
+		case "in progress":
+			return 1
+		case "complete":
+			return 2
+		}
+		return 3
+	}
+	gs := append([]StatusGroup(nil), groups...)
+	for i := 1; i < len(gs); i++ {
+		for j := i; j > 0 && rank(gs[j].Name) < rank(gs[j-1].Name); j-- {
+			gs[j], gs[j-1] = gs[j-1], gs[j]
+		}
+	}
+	seen := map[string]bool{}
+	var out []Option
+	for _, g := range gs {
+		for _, id := range g.OptionIDs {
+			if o, ok := byID[id]; ok && !seen[o.Name] {
+				seen[o.Name] = true
+				out = append(out, o)
+			}
+		}
+	}
+	for _, o := range opts {
+		if !seen[o.Name] {
+			seen[o.Name] = true
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// OrderedOptions returns the property's options in display order: for status
+// columns with groups, options follow To-do, In progress, Complete.
+func (p Property) OrderedOptions() []Option {
+	if len(p.ordered) > 0 {
+		return p.ordered
+	}
+	return p.Options
 }
 
 // Editable reports whether a property's value can be set: not one Notion

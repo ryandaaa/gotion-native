@@ -28,6 +28,8 @@ type newRow struct {
 	title    string
 	busy     bool
 	template string // the chosen template's name, "" for none
+	groupCol string // board column name when adding from a lane
+	groupVal string // board option name when adding from a lane
 }
 
 // setCell gives a row's property a new value: shown at once, sent to
@@ -298,7 +300,7 @@ func (a *App) addRow(c *ui.Context, i int, t *tableView) {
 func (a *App) addCard(c *ui.Context, i int, t *tableView) {
 	p := a.pal()
 	n := &t.adding
-	if !n.open {
+	if !n.open || n.groupCol != "" {
 		b := ui.Row(c.Key("add-card")).Width(250).Gap(8).Padding(14, 16).Radius(10).
 			AlignItems(ui.Center).Border(1, p.Line).Cursor(ui.CursorPointer)
 		if b.Hovered() {
@@ -315,6 +317,33 @@ func (a *App) addCard(c *ui.Context, i int, t *tableView) {
 		return
 	}
 	ui.Column(c.Key("add-card-form")).Width(250).Gap(8).Padding(14, 16).Radius(10).
+		Background(p.Panel).Border(1, p.EditLine).Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.12)).Children(func() {
+		a.addRowForm(c, i, t, true)
+	})
+}
+
+// addBoardCard is the "Baris baru" button/form at the bottom of a board lane.
+func (a *App) addBoardCard(c *ui.Context, i int, t *tableView, colName, optName string, width float32) {
+	p := a.pal()
+	n := &t.adding
+	active := n.open && n.groupCol == colName && n.groupVal == optName
+	if !active {
+		b := ui.Row(c.Key("add-lane-"+optName)).Width(width).Gap(8).Padding(8, 10).Radius(8).
+			AlignItems(ui.Center).Cursor(ui.CursorPointer)
+		if b.Hovered() {
+			b.Background(p.Hover)
+		}
+		b.Children(func() {
+			ui.Icon(c, iconPlus).Size(14, 14).TextColor(p.Faint)
+			ui.Text(c, tr.T("Baris baru")).FontSize(13).TextColor(p.Muted)
+		})
+		if b.Clicked() {
+			*n = newRow{open: true, groupCol: colName, groupVal: optName}
+			a.loadTemplates(t)
+		}
+		return
+	}
+	ui.Column(c.Key("add-lane-form-"+optName)).Width(width).Gap(8).Padding(12, 14).Radius(10).
 		Background(p.Panel).Border(1, p.EditLine).Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.12)).Children(func() {
 		a.addRowForm(c, i, t, true)
 	})
@@ -365,6 +394,17 @@ func (a *App) createRow(i int, t *tableView) {
 	}
 	t.adding.busy = true
 	client, ds := a.client, t.dsID
+	var extra map[string]any
+	var groupCol string
+	var groupShow json.RawMessage
+	if t.adding.groupCol != "" && t.adding.groupVal != "" {
+		if col, ok := t.column(t.adding.groupCol); ok {
+			if send, show, err := notion.Value(col, "", false, []string{t.adding.groupVal}); err == nil {
+				extra = map[string]any{col.Name: send}
+				groupCol, groupShow = col.Name, show
+			}
+		}
+	}
 	template := ""
 	for _, tp := range t.templates {
 		if tp.Name == t.adding.template && t.adding.template != "" {
@@ -372,12 +412,20 @@ func (a *App) createRow(i int, t *tableView) {
 		}
 	}
 	go func() {
-		r, err := client.CreateRowFrom(context.Background(), ds, prop, title, template)
+		r, err := client.CreateRowWith(context.Background(), ds, prop, title, template, extra)
 		a.update(func() {
 			t.adding = newRow{}
 			if err != nil {
 				a.toast(tr.T("Gagal menambah baris: ") + errText(err))
 				return
+			}
+			if groupCol != "" && groupShow != nil {
+				if r.Properties == nil {
+					r.Properties = map[string]json.RawMessage{}
+				}
+				if _, ok := r.Properties[groupCol]; !ok {
+					r.Properties[groupCol] = groupShow
+				}
 			}
 			t.rows = append(t.rows, r)
 			a.toast(tr.T("Baris ditambahkan"))
