@@ -79,15 +79,25 @@ type Session struct {
 	seenBy   string
 	cancel   context.CancelFunc
 
-	shape   doc.Shape
-	force   bool // pull on the next tick, changed or not
-	unsaved bool // pending holds edits not yet written to the cache
-	sent    bool // pending was restored from disk, and pushed since
+	shape doc.Shape
+	force bool // pull on the next tick, changed or not
+	// tree is the page's blocks as last fetched in full, nested; with it a
+	// change to a few blocks fetches only those (changed), and a toggle
+	// opened or shut (reshape) fetches nothing.
+	tree     []*notion.Block
+	treePage *notion.Page
+	changed  []string
+	reshape  bool
+	unsaved  bool // pending holds edits not yet written to the cache
+	sent     bool // pending was restored from disk, and pushed since
 
 	fails   int       // sends failed in a row
 	retryAt time.Time // no send before this, after a failure
 	said    string    // the failure last told, not told again
 }
+
+// errNoClient is opening a page not kept yet while signed out.
+var errNoClient = errors.New("not signed in")
 
 // CacheDir is where pages are kept between runs; "" keeps none.
 var CacheDir string
@@ -216,12 +226,16 @@ func Open(ctx context.Context, client *notion.Client, botID, pageID string, shap
 	if haveCache {
 		text, known, extras := doc.Build(pageID, c.Blocks, shape)
 		s.Page, s.known, s.force = c.Page, known, true
+		s.tree, s.treePage = c.Blocks, c.Page
 		s.seenTime, s.seenBy = c.Page.LastEditedTime, c.Page.LastEditedBy.ID
 		return s, text, extras, nil
 	}
 	// Not kept yet: show the page's own blocks as soon as they come, and
 	// bring in what is nested in them and the images right after, in the
 	// background (force), as Notion takes about three requests a second.
+	if client == nil {
+		return nil, richtext.Text{}, nil, errNoClient
+	}
 	page, err := client.Page(ctx, pageID)
 	if err != nil {
 		return nil, richtext.Text{}, nil, err
@@ -242,7 +256,11 @@ func (s *Session) Reshape(shape doc.Shape) {
 	images := s.shape.Images
 	s.shape = shape
 	s.shape.Images = images
-	s.force = true
+	if s.tree != nil {
+		s.reshape = true // built again from the blocks at hand
+	} else {
+		s.force = true
+	}
 	s.mu.Unlock()
 }
 
@@ -342,8 +360,13 @@ func (s *Session) run(ctx context.Context) {
 			// Keep the edits on disk until Notion has them.
 			writeJSON(cacheFile(s.PageID, "unsent"), save)
 		}
+		s.mu.Lock()
+		reshape := s.reshape && quiet
+		s.mu.Unlock()
 		if due {
 			s.push(ctx)
+		} else if reshape {
+			s.rebuild()
 		} else if force || quiet && time.Since(lastPoll) >= poll {
 			lastPoll = time.Now()
 			s.pull(ctx, force)
@@ -562,6 +585,9 @@ func gone(err error) bool {
 
 // pull brings in the page again when someone else changed it.
 func (s *Session) pull(ctx context.Context, force bool) {
+	if force && s.patch(ctx) {
+		return
+	}
 	page, err := s.client.Page(ctx, s.PageID)
 	if err != nil {
 		if _, ok := err.(*notion.Error); !ok {
@@ -600,6 +626,7 @@ func (s *Session) pull(ctx context.Context, force bool) {
 	s.mu.Lock()
 	s.shape.Images = shape.Images
 	s.Page = page
+	s.tree, s.treePage, s.changed = blocks, page, nil
 	if s.pending != nil {
 		// The user is typing: their edits win, as the last writer.
 		s.mu.Unlock()
@@ -686,5 +713,158 @@ func (s *Session) Deletable(id string) bool {
 func (s *Session) Refresh() {
 	s.mu.Lock()
 	s.force = true
+	s.changed = nil
 	s.mu.Unlock()
+}
+
+// maxPatch is the most blocks a change fetches one by one; more, and the
+// page comes in whole, in fewer requests.
+const maxPatch = 20
+
+// RefreshBlocks shows the page again after the blocks ids changed
+// elsewhere: those blocks alone are fetched, when the page is at hand in
+// full; otherwise, or with no ids, the whole page, as Refresh.
+func (s *Session) RefreshBlocks(ids []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.force = true
+	if len(ids) == 0 || s.tree == nil {
+		s.changed = nil
+		return
+	}
+	s.changed = append(s.changed, ids...)
+}
+
+// patch fetches the changed blocks alone and puts them in the tree, then
+// shows it: false when it can't (no tree, too many, a block it doesn't
+// place, as a new one), for a pull of the whole page instead.
+func (s *Session) patch(ctx context.Context) bool {
+	s.mu.Lock()
+	ids := s.changed
+	tree := s.tree
+	s.changed = nil
+	s.mu.Unlock()
+	if tree == nil || len(ids) == 0 || len(ids) > maxPatch {
+		return false
+	}
+	seen := map[string]bool{}
+	var images []*notion.Block
+	for _, id := range ids {
+		if seen[id] || id == s.PageID {
+			continue
+		}
+		seen[id] = true
+		b, err := s.client.Block(ctx, id)
+		if err != nil {
+			if gone(err) {
+				if !removeBlock(&tree, id) {
+					return false
+				}
+				continue
+			}
+			return false
+		}
+		depth, ok := blockDepth(tree, id, 0)
+		if !ok {
+			return false // a block new to this page: the whole page
+		}
+		if b.InTrash {
+			removeBlock(&tree, id)
+			continue
+		}
+		if b.HasChildren && depth+1 < doc.MaxDepth {
+			kids, err := s.client.Tree(ctx, id, doc.MaxDepth-depth-2)
+			if err != nil {
+				return false
+			}
+			b.Children = kids
+		}
+		replaceBlock(tree, b)
+		images = append(images, b)
+	}
+	page, err := s.client.Page(ctx, s.PageID)
+	if err != nil {
+		return false
+	}
+	imgs := loadImages(ctx, images)
+	s.mu.Lock()
+	if s.shape.Images == nil {
+		s.shape.Images = map[string]ui.ImageSource{}
+	}
+	for k, v := range imgs {
+		s.shape.Images[k] = v
+	}
+	s.tree, s.treePage, s.Page = tree, page, page
+	s.seenTime, s.seenBy = page.LastEditedTime, page.LastEditedBy.ID
+	s.force = false
+	s.mu.Unlock()
+	writeJSON(cacheFile(s.PageID, "page"), cached{page, tree})
+	s.rebuild()
+	return true
+}
+
+// rebuild shows the tree at hand again, in the current shape: after a
+// patch, or a toggle opened or shut.
+func (s *Session) rebuild() {
+	s.mu.Lock()
+	s.reshape = false
+	tree, shape := s.tree, s.shape
+	if tree == nil || s.pending != nil {
+		// The user is typing: their edits win, as the last writer.
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+	text, known, extras := doc.Build(s.PageID, tree, shape)
+	s.mu.Lock()
+	if s.pending != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.known = known
+	s.mu.Unlock()
+	if s.OnRemote != nil {
+		s.OnRemote(text, extras)
+	}
+}
+
+// blockDepth finds the block id in bs: how deep it is, and whether it is.
+func blockDepth(bs []*notion.Block, id string, depth int) (int, bool) {
+	for _, b := range bs {
+		if b.ID == id {
+			return depth, true
+		}
+		if d, ok := blockDepth(b.Children, id, depth+1); ok {
+			return d, true
+		}
+	}
+	return 0, false
+}
+
+// replaceBlock puts b in the place of the block of its ID.
+func replaceBlock(bs []*notion.Block, b *notion.Block) bool {
+	for i, old := range bs {
+		if old.ID == b.ID {
+			bs[i] = b
+			return true
+		}
+		if replaceBlock(old.Children, b) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeBlock takes the block id out of *bs, wherever it is nested.
+func removeBlock(bs *[]*notion.Block, id string) bool {
+	for i, b := range *bs {
+		if b.ID == id {
+			*bs = append((*bs)[:i:i], (*bs)[i+1:]...)
+			return true
+		}
+		if removeBlock(&b.Children, id) {
+			return true
+		}
+	}
+	return false
 }

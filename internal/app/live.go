@@ -312,7 +312,12 @@ func (a *App) onEvents(events []liveEvent) {
 				// What gotion itself sent is on screen already: no reload, no
 				// flicker under the caret.
 				if !ownEdit(e, botID) {
-					pn.session.Refresh()
+					// Only the blocks it names, where it names them.
+					var ids []string
+					for _, b := range e.Data.UpdatedBlocks {
+						ids = append(ids, b.ID)
+					}
+					pn.session.RefreshBlocks(ids)
 				}
 			case len(e.Type) > 8 && e.Type[:8] == "comment." && pn.comments.loaded:
 				a.loadComments(pn)
