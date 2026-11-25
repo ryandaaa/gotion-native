@@ -54,6 +54,10 @@ type panel struct {
 	handle handleState
 	// the @ popup
 	mention mentionState
+	// inline table cell editor
+	cellEdit cellEditState
+	pointerX float32
+	pointerY float32
 	// the ••• menu of the page
 	menu pageMenu
 	// the comments beside it
@@ -906,6 +910,8 @@ func (a *App) followLink(i int) func(url string) {
 				a.navigateID(id, "page", parent, i)
 			case "db":
 				a.navigateID(id, "database", parent, i)
+			case "table":
+				a.clickTable(p, id)
 			case "toggle":
 				a.set.Toggles[id] = !a.set.Toggles[id]
 				a.saveSettings()

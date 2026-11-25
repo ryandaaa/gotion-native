@@ -916,6 +916,9 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 			// The page scrolls around it, with its own bar.
 			NoScrollbar: true,
 		}).FillWidth().Height(editorHeight(pn.doc)).Background(p.Panel).Border(0, p.Panel).Radius(0)
+		if px, py, ok := e.PointerPosition(); ok {
+			pn.pointerX, pn.pointerY = px, py
+		}
 		if pn.focusEditor {
 			pn.focusEditor = false
 			e.Focus()
@@ -949,6 +952,7 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 		}
 		a.handles(c, pn, box, pad)
 		a.slashView(c, pn)
+		a.cellEditView(c, pn)
 		a.mentionView(c, pn)
 		a.headingJumpAndFlash(c, pn, pad)
 		if e.Focused() && !pn.slash.open {

@@ -34,6 +34,15 @@ var commands = []command{
 	{"Bullet", tr.N("Daftar berpoin"), "bullet list poin", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Bullets) }},
 	{tr.N("Bernomor"), tr.N("Daftar bernomor"), "numbered number nomor list", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleList(richtext.Numbers) }},
 	{tr.N("Kutipan"), "Quote", "quote kutipan", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleQuote() }},
+	{"Toggle", tr.N("Daftar yang bisa dibuka-tutup"), "toggle lipat", func(a *App, pn *panel) {
+		plain(pn.doc)
+		pn.doc.Insert(doc.Toggle(""))
+	}},
+	{"Callout", tr.N("Kotak sorotan dengan ikon"), "callout sorotan info", func(a *App, pn *panel) {
+		plain(pn.doc)
+		pn.doc.Insert(doc.Callout("💡", a.shape(pn)))
+		pn.doc.ToggleQuote()
+	}},
 	{tr.N("Kode"), tr.N("Blok kode"), "code kode", func(a *App, pn *panel) { plain(pn.doc); pn.doc.ToggleCodeBlock() }},
 	{tr.N("Pembatas"), tr.N("Garis pemisah"), "divider pembatas garis hr", func(a *App, pn *panel) {
 		pn.doc.Insert(doc.Divider())

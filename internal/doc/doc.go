@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"gotion/internal/tr"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -19,7 +20,7 @@ import (
 )
 
 // MaxDepth is how deep nested blocks are shown.
-const MaxDepth = 3
+const MaxDepth = 6
 
 const (
 	contPrefix  = "cont:"  // a later line of a block's text: cont:<id>:<n>
@@ -81,6 +82,9 @@ func glyph(kind string) richtext.Run {
 				p.Line(x+3, y+5, x+9, y+5, 1.2, c)
 				p.Line(x+3, y+8, x+9, y+8, 1.2, c)
 				p.Line(x+3, y+11, x+7, y+11, 1.2, c)
+			case "link":
+				p.Stroke(ui.Rect{X: x, Y: y + 4, W: 8, H: 6}, c, 3, 1.3)
+				p.Stroke(ui.Rect{X: x + 6, Y: y + 4, W: 8, H: 6}, c, 3, 1.3)
 			default:
 				p.Stroke(ui.Rect{X: x, Y: y + 1, W: 14, H: 12}, c, 2, 1.3)
 				p.Line(x, y+5, x+14, y+5, 1.2, c)
@@ -97,8 +101,32 @@ func Divider() richtext.Text {
 	return richtext.TextOf(richtext.Paragraph{Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Attachment: divider()}}}})
 }
 
+// Toggle returns the leading arrow decoration for a new toggle block.
+func Toggle(id string) richtext.Text {
+	return richtext.TextOf(richtext.Paragraph{Runs: []richtext.Run{decoration("▸ ", LinkPrefix+"toggle/"+id, ui.Hex("#78716C"))}})
+}
+
+// Callout returns the leading emoji icon decoration for a new callout block.
+func Callout(emoji string, shape Shape) richtext.Text {
+	return richtext.TextOf(richtext.Paragraph{Runs: iconRun(emoji, shape)})
+}
+
 func isDivider(runs []richtext.Run) bool {
 	return len(runs) == 1 && runs[0].Attributes.Attachment != nil && runs[0].Attributes.Attachment.Name == "divider"
+}
+
+func hasTogglePrefix(runs []richtext.Run) bool {
+	return len(runs) > 0 && strings.HasPrefix(runs[0].Attributes.Tag, uiTag) && strings.HasPrefix(runs[0].Attributes.Link, LinkPrefix+"toggle/")
+}
+
+func calloutEmoji(runs []richtext.Run) string {
+	if len(runs) == 0 || !strings.HasPrefix(runs[0].Attributes.Tag, uiTag) || runs[0].Attributes.Link != "" {
+		return ""
+	}
+	if runs[0].Attributes.Attachment != nil && runs[0].Attributes.Attachment.Name != "" {
+		return runs[0].Attributes.Attachment.Name
+	}
+	return strings.TrimSpace(strings.TrimPrefix(runs[0].Attributes.Tag, uiTag))
 }
 
 func decoration(text string, link string, color ui.Color) richtext.Run {
@@ -179,16 +207,37 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 		}
 		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("file")}, link("file/", name+tr.T(" (unduh)"))...)}
 	case "table":
-		if len(b.Children) > 0 {
-			return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
-				Attributes: richtext.Attributes{Attachment: tableAttachment(b, shape.Width)}}}}
-		}
+		return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement),
+			Attributes: richtext.Attributes{Link: LinkPrefix + "table/" + b.ID, Attachment: tableAttachment(b, shape.Width)}}}}
 	case "child_database":
 		title := strings.TrimSpace(p.Title)
 		if title == "" || title == "-" {
 			title = tr.T("Database tanpa judul")
 		}
 		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("table")}, link("db/", title)...)}
+	case "bookmark", "embed", "link_preview":
+		var bp struct {
+			URL     string            `json:"url"`
+			Caption []notion.RichText `json:"caption"`
+		}
+		json.Unmarshal(b.Payload, &bp)
+		if !ui.SafeToOpen(bp.URL) {
+			break
+		}
+		title := strings.TrimSpace(notion.PlainText(bp.Caption))
+		if title == "" {
+			if u, err := url.Parse(bp.URL); err == nil && u.Host != "" {
+				title = u.Host
+			} else {
+				title = bp.URL
+			}
+		}
+		runs := []richtext.Run{
+			glyph("link"),
+			{Text: title, Attributes: richtext.Attributes{Link: bp.URL, Underline: true}},
+			{Text: "  " + bp.URL, Attributes: richtext.Attributes{Link: bp.URL, Color: muted.Color}},
+		}
+		return richtext.Paragraph{Style: st, Runs: runs}
 	}
 	label := tr.T("Block ") + strings.ReplaceAll(b.Type, "_", " ") + tr.T(": buka di Notion ↗")
 	runs := link("open/", label)
@@ -497,10 +546,20 @@ func Items(text richtext.Text, known map[string]*Known) []Item {
 		it := Item{ID: id, Type: TypeOf(p.Style, old), Indent: p.Style.Indent, Payload: map[string]any{}}
 		if k == nil && isDivider(p.Runs) {
 			it.Type = "divider"
+		} else if it.Type == "paragraph" && hasTogglePrefix(p.Runs) {
+			it.Type = "toggle"
+		} else if it.Type == "quote" && calloutEmoji(p.Runs) != "" {
+			it.Type = "callout"
 		}
 		switch it.Type {
 		case "to_do":
 			it.Payload["checked"] = p.Style.Checked
+		case "callout":
+			if k == nil {
+				if e := calloutEmoji(p.Runs); e != "" {
+					it.Payload["icon"] = map[string]any{"type": "emoji", "emoji": e}
+				}
+			}
 		case "code":
 			lang := "plain text"
 			if k != nil && k.Language != "" {
