@@ -89,6 +89,31 @@ func (a *App) View(c *ui.Context) {
 		}
 		w := row.AnimateTo("sidebar", target, ui.Smooth)
 		open := min(1, max(0, w/a.set.SidebarWidth))
+
+		rightPaneW := a.set.RightPaneWidth
+		if rightPaneW < 240 || rightPaneW > 460 {
+			rightPaneW = 300
+		}
+		const minPanelForRight = float32(560)
+		numPanels := float32(1)
+		if a.panels[1] != nil {
+			numPanels = 2
+		}
+		canShowRight := true
+		if rb := row.LayoutBounds(); rb.W > 0 {
+			avail := rb.W - w
+			canShowRight = avail >= numPanels*minPanelForRight+rightPaneW
+		}
+		showRight := a.set.RightPane && canShowRight
+		a.rightPaneOpen = showRight
+		a.rightPaneFits = canShowRight
+		var targetRW float32
+		if showRight {
+			targetRW = rightPaneW
+		}
+		rw := row.AnimateTo("rightpane", targetRW, ui.Smooth)
+		openR := min(1, max(0, rw/rightPaneW))
+
 		row.Children(func() {
 			if w > 0.5 {
 				ui.Box(c).Width(w).Shrink(0).Clip().Children(func() {
@@ -101,6 +126,14 @@ func (a *App) View(c *ui.Context) {
 			// Room on the left of the panels while the sidebar is shut, so
 			// they keep looking like cards.
 			a.main(c, 10*(1-open))
+			if showRight {
+				a.rightPaneHandle(c)
+			}
+			if rw > 0.5 {
+				ui.Box(c.Key("right-pane-wrap")).Width(rw).Shrink(0).Clip().Opacity(openR).Children(func() {
+					ui.Column(c).Width(rightPaneW).FillHeight().Children(func() { a.rightPane(c) })
+				})
+			}
 		})
 	})
 	if a.switcher.open {
@@ -119,6 +152,8 @@ func (a *App) shortcuts(c *ui.Context) {
 	switch {
 	case c.Shortcut(ui.Cmd, ui.KeyK), c.Shortcut(ui.Cmd, ui.KeyP):
 		a.openSwitcher()
+	case c.Shortcut(ui.Cmd|ui.Shift, ui.KeySpace):
+		a.openCaptureWindow()
 	case c.Shortcut(ui.Cmd, ui.KeyN):
 		if p := a.panels[a.focus]; p != nil {
 			a.newPage(p.id)
@@ -129,6 +164,9 @@ func (a *App) shortcuts(c *ui.Context) {
 		a.forward()
 	case c.Shortcut(ui.Cmd, ui.KeyBackslash):
 		a.set.SidebarOff = !a.set.SidebarOff
+		a.saveSettings()
+	case c.Shortcut(ui.Cmd|ui.Shift, ui.KeyPeriod):
+		a.set.RightPane = !a.set.RightPane
 		a.saveSettings()
 	case c.Shortcut(ui.Cmd, ui.KeyW):
 		if p := a.panels[a.focus]; p != nil {
@@ -237,6 +275,10 @@ func (a *App) titleBar(c *ui.Context, full bool) {
 			a.refresh()
 		}
 		a.themeButton(c)
+		if iconButton(c, p, iconRightPane, tr.T("Pane kanan (Ctrl+Shift+.)")) {
+			a.set.RightPane = !a.set.RightPane
+			a.saveSettings()
+		}
 	})
 }
 
@@ -283,9 +325,9 @@ func (a *App) breadcrumbs(c *ui.Context) {
 func (a *App) sidebar(c *ui.Context) {
 	p := a.pal()
 	ui.Column(c).Fill().Padding(4, 8, 10, 10).Gap(2).Children(func() {
-		for _, id := range []string{todayID, libraryID, trashID} {
+		for _, id := range []string{todayID, calID, libraryID, trashID} {
 			n := a.special(id)
-			s := map[string]*ui.SVG{todayID: iconCalendar, libraryID: iconLibrary, trashID: iconTrash}[id]
+			s := map[string]*ui.SVG{todayID: iconCalendar, calID: iconCalendar, libraryID: iconLibrary, trashID: iconTrash}[id]
 			current := a.panels[a.focus] != nil && a.panels[a.focus].id == id
 			r := ui.Row(c.Key("sp"+id)).AlignItems(ui.Center).Gap(10).Padding(7, 10).Radius(8).Cursor(ui.CursorPointer)
 			if current {
@@ -614,6 +656,8 @@ func (a *App) panelView(c *ui.Context, i int) {
 			a.empty(c)
 		case a.kindOf(pn.id) == "today":
 			a.todayPanel(c, i)
+		case a.kindOf(pn.id) == "calendar":
+			a.allCalendarPanel(c, i)
 		case a.kindOf(pn.id) == "library":
 			a.libraryPanel(c, i)
 		case a.kindOf(pn.id) == "trash":
@@ -749,11 +793,11 @@ func (a *App) pagePanel(c *ui.Context, i int, pn *panel) {
 	// the properties and the text scroll as one, as in Notion: the editor is
 	// as tall as its text, in the page's scroll.
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Scroll(c.Key("page-scroll" + pn.id)).Grow(1).MinWidth(0).MinHeight(0).ScrollbarStyle(a.thinScrollbar()).Children(func() {
+		ui.Scroll(c.Key("page-scroll" + pn.id)).Grow(1).MinWidth(0).MinHeight(0).TrackScroll(&pn.scroll).ScrollbarStyle(a.thinScrollbar()).Children(func() {
 			a.coverView(c, pn)
 			a.pageBody(c, i, pn, n, width, pad)
 		})
-		if pn.comments.open {
+		if pn.comments.open && !a.rightPaneOpen {
 			a.commentsDrawer(c, pn)
 		}
 	})
@@ -906,6 +950,7 @@ func (a *App) editor(c *ui.Context, i int, pn *panel, pad float32) {
 		a.handles(c, pn, box, pad)
 		a.slashView(c, pn)
 		a.mentionView(c, pn)
+		a.headingJumpAndFlash(c, pn, pad)
 		if e.Focused() && !pn.slash.open {
 			a.formatBar(c, pn)
 		}
@@ -1000,6 +1045,31 @@ func (a *App) sidebarHandle(c *ui.Context) {
 	}
 	if h.DoubleClicked() {
 		a.set.SidebarWidth = 270
+		a.saveSettings()
+	}
+}
+
+func (a *App) rightPaneHandle(c *ui.Context) {
+	p := a.pal()
+	h := ui.Box(c.Key("rightpane-edge")).Width(8).Shrink(0).FillHeight().Cursor(ui.CursorResizeEW).Label(tr.T("Lebar pane kanan"))
+	active := h.Hovered() || h.Pressed()
+	h.Draw(func(pt *ui.Painter, r ui.Rect) {
+		if active {
+			pt.Fill(ui.Rect{X: r.X + r.W/2 - 1, Y: r.Y + 8, W: 2, H: r.H - 16}, p.Accent.Alpha(0.7), 1)
+		}
+	})
+	if dx, _, ok := h.Dragged(); ok {
+		cur := a.set.RightPaneWidth
+		if cur < 240 || cur > 460 {
+			cur = 300
+		}
+		a.set.RightPaneWidth = min(max(cur-dx, 240), 460)
+	}
+	if _, _, ended := h.DragEnded(); ended {
+		a.saveSettings()
+	}
+	if h.DoubleClicked() {
+		a.set.RightPaneWidth = 300
 		a.saveSettings()
 	}
 }

@@ -128,8 +128,11 @@ func DeferDate(p Property, raw json.RawMessage, targetDay time.Time) (send any, 
 		if v.Date.End != "" {
 			if sDay, ok1 := parseDay(v.Date.Start); ok1 {
 				if eDay, ok2 := parseDay(v.Date.End); ok2 {
-					dur := eDay.Sub(sDay)
-					endTarget := targetDay.Add(dur)
+					// Whole days, not hours: a range across a
+					// daylight-saving change keeps its length.
+					days := int(time.Date(eDay.Year(), eDay.Month(), eDay.Day(), 0, 0, 0, 0, time.UTC).
+						Sub(time.Date(sDay.Year(), sDay.Month(), sDay.Day(), 0, 0, 0, 0, time.UTC)).Hours() / 24)
+					endTarget := targetDay.AddDate(0, 0, days)
 					dateObj["end"] = shift(v.Date.End, endTarget)
 				}
 			}

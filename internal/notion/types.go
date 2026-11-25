@@ -108,6 +108,10 @@ type RichText struct {
 			URL string `json:"url"`
 		} `json:"link"`
 	} `json:"text,omitempty"`
+	Mention *struct {
+		Type string `json:"type"`
+		User *User  `json:"user,omitempty"`
+	} `json:"mention,omitempty"`
 	Raw json.RawMessage `json:"-"`
 }
 
@@ -196,6 +200,7 @@ type Page struct {
 	URL            string                     `json:"url"`
 	InTrash        bool                       `json:"in_trash"`
 	LastEditedTime time.Time                  `json:"last_edited_time"`
+	CreatedBy      User                       `json:"created_by"`
 	LastEditedBy   User                       `json:"last_edited_by"`
 	Parent         Parent                     `json:"parent"`
 	Properties     map[string]json.RawMessage `json:"properties"`

@@ -11,6 +11,7 @@ import (
 type Comment struct {
 	ID           string     `json:"id"`
 	DiscussionID string     `json:"discussion_id"`
+	Parent       Parent     `json:"parent"`
 	CreatedTime  time.Time  `json:"created_time"`
 	CreatedBy    User       `json:"created_by"`
 	RichText     []RichText `json:"rich_text"`
@@ -18,6 +19,12 @@ type Comment struct {
 		Type         string `json:"type"`
 		ResolvedName string `json:"resolved_name"`
 	} `json:"display_name"`
+}
+
+// Comment fetches a single comment by ID.
+func (c *Client) Comment(ctx context.Context, commentID string) (*Comment, error) {
+	var cm Comment
+	return &cm, c.Do(ctx, "GET", "/comments/"+commentID, nil, &cm)
 }
 
 // Comments returns the open comments of a page or block, oldest first.

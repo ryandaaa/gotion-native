@@ -35,6 +35,12 @@ type tableView struct {
 	columns        []notion.Property
 	rows           []*notion.Page
 	boardMoved     map[string]int // frame countdown for smooth card entrance
+	cal            calendarState
+	selectedID     string
+	previewID      string
+	previewBlocks  []*notion.Block
+	previewLoading bool
+	previewErr     string
 	loading        bool
 	err            string
 }
@@ -285,7 +291,12 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 		ui.Text(c, fmt.Sprintf(tr.T("%d baris"), len(t.rows))).FontSize(12).TextColor(p.Faint)
 		a.queryButtons(c, t)
 		ui.Row(c).Gap(2).Padding(2).Radius(7).Background(p.Sidebar).Children(func() {
-			for _, v := range []struct{ id, label string }{{"table", tr.T("Tabel")}, {"cards", tr.T("Kartu")}, {"board", tr.T("Board")}} {
+			for _, v := range []struct{ id, label string }{
+				{"table", tr.T("Tabel")},
+				{"cards", tr.T("Kartu")},
+				{"board", tr.T("Board")},
+				{"calendar", tr.T("Kalender")},
+			} {
 				b := ui.Text(c.Key("view"+v.id), v.label).FontSize(12).Padding(3, 10).Radius(5).Cursor(ui.CursorPointer)
 				if view == v.id {
 					b.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
@@ -293,8 +304,13 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 					b.TextColor(p.Muted)
 				}
 				if b.Clicked() {
+					prev := a.set.Views[t.id]
 					a.set.Views[t.id] = v.id
 					a.saveSettings()
+					if prev == "calendar" && v.id != "calendar" && t.cal.queriedKey != "" {
+						t.cal.queriedKey = ""
+						a.requery(t)
+					}
 				}
 			}
 		})
@@ -332,11 +348,16 @@ func (a *App) tablePanel(c *ui.Context, i int, pn *panel) {
 			a.sendTableTitle(t)
 		}
 	})
+	if a.rightPaneOpen && i == a.focus && !t.edit.open && !t.adding.open {
+		a.tablePreviewKeys(c, i, t)
+	}
 	switch view {
 	case "cards":
 		a.cards(c, i, t)
 	case "board":
 		a.board(c, i, t)
+	case "calendar":
+		a.calendar(c, i, t)
 	default:
 		a.grid(c, i, t)
 	}
@@ -376,9 +397,13 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 						for j, col := range t.columns {
 							e := cellOf("c"+col.Name, col, j == len(t.columns)-1)
 							if col.Type == "title" {
-								// The title opens the row as a page.
+								// The title opens the row as a page (or selects it when the right pane is open).
 								e.Cursor(ui.CursorPointer)
-								if e.Hovered() {
+								selected := a.rightPaneOpen && t.selectedID == r.ID
+								if selected {
+									accentBg, _ := tintColors(p.Accent, a.dark)
+									e.Background(accentBg.Alpha(0.55))
+								} else if e.Hovered() {
 									e.Background(p.Hover)
 								}
 								e.Children(func() {
@@ -389,7 +414,13 @@ func (a *App) grid(c *ui.Context, i int, t *tableView) {
 									}
 									ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(14).FontWeight(500).SingleLine().MinWidth(0)
 								})
-								if e.Clicked() {
+								if a.rightPaneOpen {
+									if e.DoubleClicked() {
+										a.openRow(i, t, r)
+									} else if e.Clicked() {
+										t.selectedID = r.ID
+									}
+								} else if e.Clicked() {
 									a.openRow(i, t, r)
 								}
 								e.ContextMenu(func(m *ui.Menu) {
@@ -441,11 +472,16 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 // returns its element so callers can attach drag/pose behavior.
 func (a *App) rowCard(c *ui.Context, i int, t *tableView, r *notion.Page, width float32) ui.Element {
 	p := a.pal()
+	selected := a.rightPaneOpen && t.selectedID == r.ID
 	card := ui.Column(c.Key("card"+r.ID)).Width(width).Gap(8).Padding(14, 16).Radius(10).
 		Background(p.Panel).Cursor(ui.CursorPointer)
-	if card.Hovered() {
+	switch {
+	case selected:
+		accentBg, _ := tintColors(p.Accent, a.dark)
+		card.Background(accentBg.Alpha(0.28)).Border(1.5, p.Accent).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.05))
+	case card.Hovered():
 		card.Border(1, p.EditLine).Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.12))
-	} else {
+	default:
 		card.Border(1, p.Line).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.05))
 	}
 	own := false // a click on a property edits it, not opens the page
@@ -482,8 +518,16 @@ func (a *App) rowCard(c *ui.Context, i int, t *tableView, r *notion.Page, width 
 		})
 		ui.Text(c, tr.T("Diubah ")+ago(r.LastEditedTime)).FontSize(11).TextColor(p.Faint)
 	})
-	if card.Clicked() && !own && !t.edit.open {
-		a.openRow(i, t, r)
+	if !own && !t.edit.open {
+		if a.rightPaneOpen {
+			if card.DoubleClicked() {
+				a.openRow(i, t, r)
+			} else if card.Clicked() {
+				t.selectedID = r.ID
+			}
+		} else if card.Clicked() {
+			a.openRow(i, t, r)
+		}
 	}
 	return card
 }

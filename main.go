@@ -2,6 +2,7 @@
 package main
 
 import (
+	_ "embed"
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/plugins/updater/native"
 	"log"
@@ -17,7 +18,11 @@ import (
 	"gotion/internal/syncer"
 )
 
+//go:embed resources/icon.png
+var trayIcon []byte
+
 func main() {
+	app.TrayIcon = trayIcon
 	app.RegisterFonts()
 	if dir, err := os.UserConfigDir(); err == nil {
 		syncer.CacheDir = filepath.Join(dir, "gotion", "cache")
@@ -73,6 +78,12 @@ func main() {
 		})
 		emoji.OnLoad = w.Invalidate
 		a.Attach(w)
+	})
+	mygo.App.OnNotificationClick(func(id string) { a.OnNotificationClick(id) })
+	mygo.App.OnActivate(func(hasVisibleWindows bool) {
+		if !hasVisibleWindows {
+			a.ShowWindow()
+		}
 	})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.Close() })
 	if err := mygo.App.Run(); err != nil {

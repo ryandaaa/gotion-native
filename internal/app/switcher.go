@@ -22,25 +22,35 @@ func (a *App) openSwitcher() {
 	a.switcher = switcherState{open: true}
 }
 
+const captureID = "__capture__"
+
 // switcherMatches returns the pages whose title has the query, the
 // recently edited first when the query is empty.
 func (a *App) switcherMatches() []*node {
 	q := strings.ToLower(strings.TrimSpace(a.switcher.query))
 	var out []*node
+	capTitle := tr.T("Tangkap cepat")
+	if q == "" || strings.Contains(strings.ToLower(capTitle), q) || strings.Contains("quick capture", q) {
+		out = append(out, &node{ID: captureID, Title: capTitle, Kind: "capture"})
+	}
 	for _, n := range a.nodes {
 		if q == "" || strings.Contains(strings.ToLower(n.Title), q) {
 			out = append(out, n)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
+	rest := out
+	if len(out) > 0 && out[0].ID == captureID {
+		rest = out[1:]
+	}
+	sort.Slice(rest, func(i, j int) bool {
 		if q != "" {
-			pi := strings.HasPrefix(strings.ToLower(out[i].Title), q)
-			pj := strings.HasPrefix(strings.ToLower(out[j].Title), q)
+			pi := strings.HasPrefix(strings.ToLower(rest[i].Title), q)
+			pj := strings.HasPrefix(strings.ToLower(rest[j].Title), q)
 			if pi != pj {
 				return pi
 			}
 		}
-		return byEditedThenTitle(out[i], out[j])
+		return byEditedThenTitle(rest[i], rest[j])
 	})
 	if len(out) > 12 {
 		out = out[:12]
@@ -57,6 +67,10 @@ func (a *App) switcherView(c *ui.Context) {
 	}
 	pick := func(n *node, beside bool) {
 		s.open = false
+		if n.ID == captureID {
+			a.openCaptureWindow()
+			return
+		}
 		if beside {
 			a.openBeside(n)
 		} else {
@@ -107,6 +121,8 @@ func (a *App) switcherView(c *ui.Context) {
 					}
 					row.Children(func() {
 						switch {
+						case n.ID == captureID:
+							ui.Icon(c, iconPlus).Size(15, 15).TextColor(p.Accent)
 						case n.Emoji != "":
 							emoji.View(c, n.Emoji, 16)
 						case n.Kind != "page":

@@ -17,6 +17,13 @@ type liveEvent struct {
 		ID   string `json:"id"`
 		Type string `json:"type"`
 	} `json:"entity"`
+	Data struct {
+		PageID string `json:"page_id"`
+		Parent struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"parent"`
+	} `json:"data"`
 }
 
 // livePoll is how often the app asks the Worker for events.
@@ -85,6 +92,9 @@ func (a *App) onEvents(events []liveEvent) {
 			tree = true
 			today = true
 		}
+		if len(e.Type) > 8 && e.Type[:8] == "comment." {
+			a.handleCommentEvent(e)
+		}
 		for _, pn := range a.panels {
 			if pn == nil || pn.id == "" {
 				continue
@@ -92,7 +102,7 @@ func (a *App) onEvents(events []liveEvent) {
 			switch {
 			case e.Type == "page.content_updated" && e.Entity.ID == pn.id && pn.session != nil:
 				pn.session.Refresh()
-			case len(e.Type) > 8 && e.Type[:8] == "comment." && pn.comments.open:
+			case len(e.Type) > 8 && e.Type[:8] == "comment." && pn.comments.loaded:
 				a.loadComments(pn)
 			}
 		}

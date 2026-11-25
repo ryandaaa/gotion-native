@@ -108,6 +108,22 @@ Split the window into two resizable panels with independent tab strips and unsav
 
 </td>
 </tr>
+<tr>
+<td valign="top" width="50%">
+
+**Today, at a glance**
+
+A Today view gathers rows assigned to you from every database: a week strip with dots per day, one focus card for the most urgent task, the rest as small cards, and quick add. Mark tasks done or move them to tomorrow in place. Databases also show as a Board grouped by status, or as a Calendar where rows drag between days and ranges keep their length.
+
+</td>
+<td valign="top" width="50%">
+
+**Tray, reminders, and quick capture**
+
+Optionally keep gotion in the tray with a badge of today's tasks, a morning summary, reminders 15 minutes before timed tasks, and notifications for new comments that mention you or land on your pages. A global shortcut opens a small capture window that saves to your Inbox database, queueing offline. A right pane shows the page outline, comments, page info, or a preview of the selected row.
+
+</td>
+</tr>
 </table>
 
 ## Install
@@ -165,6 +181,8 @@ On macOS, `Cmd` replaces `Ctrl` for window and formatting shortcuts.
 | <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>P</kbd> | Open quick page switcher | Global |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | Create subpage inside current page | Global |
 | <kbd>Ctrl</kbd>+<kbd>\\</kbd> | Toggle sidebar | Global |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> | Toggle right pane (outline, comments, row preview) | Global |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> | Quick capture, even when gotion is in the background (changeable in Settings) | System |
 | <kbd>Ctrl</kbd>+<kbd>W</kbd> | Close active tab | Panel |
 | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | Switch between tabs | Panel |
 | <kbd>Ctrl</kbd>+<kbd>[</kbd> or <kbd>Alt</kbd>+<kbd>Left</kbd> | Navigate back | History |
@@ -187,7 +205,7 @@ On macOS, `Cmd` replaces `Ctrl` for window and formatting shortcuts.
 | <kbd>Ctrl</kbd>+<kbd>U</kbd> | Toggle underline |
 | <kbd>Ctrl</kbd>+<kbd>E</kbd> | Toggle inline code |
 | <kbd>Ctrl</kbd>+<kbd>K</kbd> | Set or edit hyperlink on selected text |
-| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send comment or reply in the comments drawer |
+| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send comment or reply in the comments pane |
 
 </details>
 

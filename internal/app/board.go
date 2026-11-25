@@ -106,7 +106,7 @@ func (a *App) board(c *ui.Context, i int, t *tableView) {
 	ui.ScrollHorizontal(c).Grow(1).MinHeight(0).Padding(12, 24, 16, 24).ScrollbarStyle(a.thinScrollbar()).Children(func() {
 		ui.Row(c).Gap(14).FillHeight().AlignItems(ui.Stretch).Children(func() {
 			for _, ln := range lanes {
-				lane := ui.Column(c.Key("lane-"+ln.key)).Width(laneW).Shrink(0).FillHeight().
+				lane := ui.Column(c.Key("lane-" + ln.key)).Width(laneW).Shrink(0).FillHeight().
 					Radius(10).Padding(10).Gap(8).Background(p.Sidebar.Alpha(0.75))
 				if _, over := ui.DragOver[*notion.Page](lane); over {
 					lane.Background(p.EditBg).Border(1.5, p.EditLine)
@@ -125,7 +125,7 @@ func (a *App) board(c *ui.Context, i int, t *tableView) {
 						}
 						ui.Text(c, strconv.Itoa(len(ln.rows))).FontSize(12).TextColor(p.Faint)
 					})
-					ui.Scroll(c.Key("lanescr-"+ln.key)).Grow(1).MinHeight(0).ScrollbarStyle(a.thinScrollbar()).Children(func() {
+					ui.Scroll(c.Key("lanescr-" + ln.key)).Grow(1).MinHeight(0).ScrollbarStyle(a.thinScrollbar()).Children(func() {
 						ui.Column(c).Gap(10).Padding(2, 2, 4, 2).Children(func() {
 							for _, r := range ln.rows {
 								card := a.rowCard(c, i, t, r, cardW)

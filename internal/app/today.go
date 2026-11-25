@@ -68,6 +68,7 @@ type todayState struct {
 	picker      bool
 	quick       quickAddState
 	focusPulse  int
+	dayPulse    int
 	tv          tableView
 	cancel      context.CancelFunc
 }
@@ -108,6 +109,7 @@ func (a *App) loadTodayCache() {
 		if len(cached.Items) > 0 || len(cached.Eligible) > 0 || len(a.today.doneToday) > 0 {
 			a.today.loaded = true
 		}
+		a.updateTrayBadge()
 	}
 }
 
@@ -522,6 +524,8 @@ func (a *App) loadToday() {
 			a.today.eligible = eligible
 			a.today.items = items
 			a.saveTodayCache()
+			a.updateTrayBadge()
+			a.checkNotifications()
 		})
 	}()
 }
@@ -660,6 +664,7 @@ func (a *App) completeTodayItem(it todayItem) {
 	a.today.doneToday[pg.ID] = it
 	a.today.focusPulse = 2
 	a.saveTodayCache()
+	a.updateTrayBadge()
 
 	client := a.client
 	go func() {
@@ -718,6 +723,7 @@ func (a *App) uncompleteTodayItem(it todayItem) {
 		a.today.items = append(a.today.items, it)
 	}
 	a.saveTodayCache()
+	a.updateTrayBadge()
 
 	client := a.client
 	go func() {
@@ -754,6 +760,7 @@ func (a *App) deferTodayItem(it todayItem) {
 	it.Page.Properties[it.DateCol] = show
 	a.today.focusPulse = 2
 	a.saveTodayCache()
+	a.updateTrayBadge()
 
 	client := a.client
 	go func() {
@@ -891,68 +898,80 @@ func (a *App) todayPanel(c *ui.Context, i int) {
 				a.todayWeekStrip(c, now, todayStart, st.items, accentBg, accentFg)
 			}
 
-			if st.selectedDay != todayKey {
-				selDate, _ := time.ParseInLocation("2006-01-02", st.selectedDay, now.Location())
-				var dayTasks []todayItem
-				for _, it := range st.items {
-					if it.Page == nil || (it.DoneCol != "" && it.DoneProp.IsComplete(it.Page.Properties[it.DoneCol])) {
-						continue
-					}
-					if d, ok := parseLocalDate(it.Page.Properties[it.DateCol], now.Location()); ok && d.Equal(selDate) {
-						dayTasks = append(dayTasks, it)
-					}
-				}
-				sortTodayUrgent(dayTasks, now)
-				unit := tr.T(" tugas")
-				ui.Text(c, formatMonthDay(selDate)+" · "+strconv.Itoa(len(dayTasks))+unit).FontSize(15).FontWeight(600)
-				if len(dayTasks) == 0 {
-					ui.Text(c, tr.T("Tidak ada tugas yang menunggu.")).FontSize(13).TextColor(p.Faint)
+			dayBody := ui.Column(c.Key("today-day-body")).FillWidth().Gap(20)
+			if st.dayPulse > 0 {
+				if st.dayPulse > 1 {
+					dayBody.AnimatePose(ui.Pose{Y: 5, Fade: 0.35}, ui.Snappy)
+					c.Invalidate()
 				} else {
-					a.todayGrid(c, i, dayTasks, now)
+					dayBody.AnimatePose(ui.Pose{}, ui.Snappy)
 				}
-				a.todayCollapsibles(c, i, groups.Week, doneList, now)
-				return
+				st.dayPulse--
 			}
-
-			// 6. Empty state for Today (no overdue or today open tasks)
-			if len(openDue) == 0 {
-				tomorrowStr := todayStart.AddDate(0, 0, 1).Format("2006-01-02")
-				tomorrowCount := 0
-				for _, it := range groups.Week {
-					if d, ok := parseLocalDate(it.Page.Properties[it.DateCol], now.Location()); ok && d.Format("2006-01-02") == tomorrowStr {
-						tomorrowCount++
+			dayBody.Children(func() {
+				if st.selectedDay != todayKey {
+					selDate, _ := time.ParseInLocation("2006-01-02", st.selectedDay, now.Location())
+					var dayTasks []todayItem
+					for _, it := range st.items {
+						if it.Page == nil || (it.DoneCol != "" && it.DoneProp.IsComplete(it.Page.Properties[it.DoneCol])) {
+							continue
+						}
+						if d, ok := parseLocalDate(it.Page.Properties[it.DateCol], now.Location()); ok && d.Equal(selDate) {
+							dayTasks = append(dayTasks, it)
+						}
 					}
+					sortTodayUrgent(dayTasks, now)
+					unit := tr.T(" tugas")
+					ui.Text(c, formatMonthDay(selDate)+" · "+strconv.Itoa(len(dayTasks))+unit).FontSize(15).FontWeight(600)
+					if len(dayTasks) == 0 {
+						ui.Text(c, tr.T("Tidak ada tugas yang menunggu.")).FontSize(13).TextColor(p.Faint)
+					} else {
+						a.todayGrid(c, i, dayTasks, now)
+					}
+					a.todayCollapsibles(c, i, groups.Week, doneList, now)
+					return
 				}
-				ui.Column(c).FillWidth().Center().Padding(40, 0, 24, 0).Gap(10).Children(func() {
-					ui.Box(c).Size(44, 44).Radius(22).Background(p.OK.Alpha(0.14)).Center().Children(func() {
-						ui.Icon(c, iconCheck).Size(20, 20).TextColor(p.OK)
+
+				// 6. Empty state for Today (no overdue or today open tasks)
+				if len(openDue) == 0 {
+					tomorrowStr := todayStart.AddDate(0, 0, 1).Format("2006-01-02")
+					tomorrowCount := 0
+					for _, it := range groups.Week {
+						if d, ok := parseLocalDate(it.Page.Properties[it.DateCol], now.Location()); ok && d.Format("2006-01-02") == tomorrowStr {
+							tomorrowCount++
+						}
+					}
+					ui.Column(c).FillWidth().Center().Padding(40, 0, 24, 0).Gap(10).Children(func() {
+						ui.Box(c).Size(44, 44).Radius(22).Background(p.OK.Alpha(0.14)).Center().Children(func() {
+							ui.Icon(c, iconCheck).Size(20, 20).TextColor(p.OK)
+						})
+						ui.Text(c, tr.T("Semua beres hari ini")).FontSize(17).FontWeight(600)
+						sub := tr.T("Tidak ada tugas yang menunggu.")
+						if tomorrowCount == 1 {
+							sub += " " + tr.T("Besok ada 1 tugas.")
+						} else if tomorrowCount > 1 {
+							sub += " " + fmt.Sprintf(tr.T("Besok ada %d tugas."), tomorrowCount)
+						}
+						ui.Text(c, sub).FontSize(13).TextColor(p.Faint)
 					})
-					ui.Text(c, tr.T("Semua beres hari ini")).FontSize(17).FontWeight(600)
-					sub := tr.T("Tidak ada tugas yang menunggu.")
-					if tomorrowCount == 1 {
-						sub += " " + tr.T("Besok ada 1 tugas.")
-					} else if tomorrowCount > 1 {
-						sub += " " + fmt.Sprintf(tr.T("Besok ada %d tugas."), tomorrowCount)
-					}
-					ui.Text(c, sub).FontSize(13).TextColor(p.Faint)
-				})
+					a.todayCollapsibles(c, i, groups.Week, doneList, now)
+					return
+				}
+
+				// 3. Focus card (openDue[0])
+				a.todayFocusCard(c, i, openDue[0], now, accentBg, accentFg)
+
+				// 4. "Berikutnya · N"
+				if rest := openDue[1:]; len(rest) > 0 {
+					ui.Column(c).FillWidth().Gap(10).Children(func() {
+						ui.Text(c, tr.T("Berikutnya")+" · "+strconv.Itoa(len(rest))).FontSize(15).FontWeight(600)
+						a.todayGrid(c, i, rest, now)
+					})
+				}
+
+				// 5. Collapsibles
 				a.todayCollapsibles(c, i, groups.Week, doneList, now)
-				return
-			}
-
-			// 3. Focus card (openDue[0])
-			a.todayFocusCard(c, i, openDue[0], now, accentBg, accentFg)
-
-			// 4. "Berikutnya · N"
-			if rest := openDue[1:]; len(rest) > 0 {
-				ui.Column(c).FillWidth().Gap(10).Children(func() {
-					ui.Text(c, tr.T("Berikutnya")+" · "+strconv.Itoa(len(rest))).FontSize(15).FontWeight(600)
-					a.todayGrid(c, i, rest, now)
-				})
-			}
-
-			// 5. Collapsibles
-			a.todayCollapsibles(c, i, groups.Week, doneList, now)
+			})
 		})
 	})
 }
@@ -990,21 +1009,20 @@ func (a *App) todayWeekStrip(c *ui.Context, now, todayStart time.Time, items []t
 			}
 
 			box := ui.Column(c.Key("wday-"+key)).Padding(10, 6).Radius(10).Center().Gap(3).Cursor(ui.CursorPointer)
+			target := float32(0)
 			if selected {
-				box.Background(accentBg)
+				target = 1
+			}
+			selT := box.AnimateTo("wsel-"+key, target, ui.Snappy)
+			if selT > 0.01 {
+				box.Background(accentBg.Alpha(selT))
 			} else if box.Hovered() {
 				box.Background(p.Hover)
 			}
 			box.Children(func() {
-				lbl := ui.Text(c, dayLabel).FontSize(11).FontWeight(500)
-				num := ui.Text(c, strconv.Itoa(d.Day())).FontSize(16).FontWeight(600)
-				if selected {
-					lbl.TextColor(accentFg)
-					num.TextColor(accentFg)
-				} else {
-					lbl.TextColor(p.Faint)
-					num.TextColor(p.Text)
-				}
+				lbl := ui.Text(c, dayLabel).FontSize(11).FontWeight(500).TextColor(p.Faint.Mix(accentFg, selT))
+				num := ui.Text(c, strconv.Itoa(d.Day())).FontSize(16).FontWeight(600).TextColor(p.Text.Mix(accentFg, selT))
+				_, _ = lbl, num
 				n := min(counts[key], 4)
 				ui.Row(c).Height(6).Gap(3).AlignItems(ui.Center).Children(func() {
 					for k := range n {
@@ -1016,8 +1034,9 @@ func (a *App) todayWeekStrip(c *ui.Context, now, todayStart time.Time, items []t
 					}
 				})
 			})
-			if box.Clicked() {
+			if box.Clicked() && a.today.selectedDay != key {
 				a.today.selectedDay = key
+				a.today.dayPulse = 2
 			}
 		}
 	})
@@ -1191,7 +1210,7 @@ func (a *App) todayCollapsibles(c *ui.Context, i int, week, done []todayItem, no
 
 func (a *App) todayCollapsibleRow(c *ui.Context, key, label string, open *bool, body func()) {
 	p := a.pal()
-	ui.Column(c.Key("col-"+key)).FillWidth().Gap(4).Children(func() {
+	ui.Column(c.Key("col-" + key)).FillWidth().Gap(4).Children(func() {
 		hdr := ui.Row(c.Key("hdr-"+key)).AlignItems(ui.Center).Gap(8).Padding(4, 2).Radius(6).Cursor(ui.CursorPointer)
 		if hdr.Hovered() {
 			hdr.Background(p.Hover)

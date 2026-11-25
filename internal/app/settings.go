@@ -36,6 +36,9 @@ type settingsView struct {
 	membersLoaded  bool
 	membersLoading bool
 	membersErr     string
+
+	inboxPicker  bool
+	parentPicker bool
 }
 
 func (a *App) openSettings(section string) {
@@ -122,7 +125,12 @@ func (a *App) settingsDialog(c *ui.Context) {
 		card.Children(func() {
 			ui.Column(c).Width(190).Shrink(0).Padding(18, 10).Gap(2).Background(p.Sidebar).Children(func() {
 				ui.Text(c, tr.T("Pengaturan")).FontSize(15).FontWeight(600).Padding(0, 10, 12, 10)
-				for _, sec := range []struct{ id, label string }{{"tampilan", tr.T("Tampilan")}, {"akun", tr.T("Akun")}, {"tentang", tr.T("Tentang")}} {
+				for _, sec := range []struct{ id, label string }{
+					{"tampilan", tr.T("Tampilan")},
+					{"notifikasi", tr.T("Notifikasi")},
+					{"akun", tr.T("Akun")},
+					{"tentang", tr.T("Tentang")},
+				} {
 					r := ui.Text(c.Key("sec"+sec.id), sec.label).FontSize(14).Padding(7, 10).Radius(7).Cursor(ui.CursorPointer)
 					if s.section == sec.id {
 						r.Background(p.Panel).FontWeight(600).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
@@ -144,6 +152,8 @@ func (a *App) settingsDialog(c *ui.Context) {
 				ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 					ui.Column(c).Padding(0, 32, 28, 28).Gap(22).Children(func() {
 						switch s.section {
+						case "notifikasi":
+							a.notificationsSection(c)
 						case "akun":
 							a.accountSection(c)
 						case "tentang":
@@ -202,6 +212,147 @@ func (a *App) appearanceSection(c *ui.Context) {
 			a.saveSettings()
 		}
 		ui.Text(c, tr.T("Mati: teks di tengah selebar baca yang nyaman, seperti Notion.")).FontSize(12).TextColor(p.Faint)
+	})
+}
+
+func (a *App) notificationsSection(c *ui.Context) {
+	p := a.pal()
+	a.sectionTitle(c, tr.T("Notifikasi"), tr.T("Tray, pengingat tugas, dan komentar."))
+
+	ui.Column(c).Gap(8).Children(func() {
+		ui.Text(c, tr.T("Aplikasi & Tray")).FontSize(12).FontWeight(600).TextColor(p.Faint)
+		stay := a.set.StayInTray && a.tray != nil
+		if ui.Checkbox(c, &stay, tr.T("Tetap berjalan di tray saat jendela ditutup")).Disabled(a.win != nil && a.tray == nil).Changed() {
+			a.set.StayInTray = stay
+			a.saveSettings()
+		}
+		if a.win != nil && a.tray == nil {
+			ui.Text(c, tr.T("Tray tidak tersedia di desktop ini.")).FontSize(12).TextColor(p.Faint).Padding(0, 0, 0, 24)
+		}
+		login := a.set.OpenAtLogin
+		if ui.Checkbox(c, &login, tr.T("Buka saat login")).Changed() {
+			if a.win != nil {
+				if err := mygo.App.SetOpenAtLogin(login); err != nil {
+					a.toast(errText(err))
+					return
+				}
+			}
+			a.set.OpenAtLogin = login
+			a.saveSettings()
+		}
+	})
+
+	ui.Column(c).Gap(10).Children(func() {
+		ui.Text(c, tr.T("Pengingat & Notifikasi")).FontSize(12).FontWeight(600).TextColor(p.Faint)
+
+		morning := !a.set.NotifyMorningOff
+		if ui.Checkbox(c, &morning, tr.T("Ringkasan pagi")).Changed() {
+			a.set.NotifyMorningOff = !morning
+			a.saveSettings()
+		}
+		if morning {
+			ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(0, 0, 0, 24).Children(func() {
+				ui.Text(c, tr.T("Jam")).FontSize(13).TextColor(p.Muted)
+				ti := ui.TextInput(c.Key("morning-time"), &a.set.MorningTime).Width(84).Placeholder("08:00")
+				if ti.Changed() {
+					if _, _, ok := parseMorningTime(a.set.MorningTime); ok {
+						a.saveSettings()
+					}
+				}
+			})
+		}
+
+		due := !a.set.NotifyDueOff
+		if ui.Checkbox(c, &due, tr.T("Pengingat tenggat (15 menit sebelumnya)")).Changed() {
+			a.set.NotifyDueOff = !due
+			a.saveSettings()
+		}
+
+		comments := !a.set.NotifyCommentOff
+		if ui.Checkbox(c, &comments, tr.T("Mention dan komentar di halaman saya")).Changed() {
+			a.set.NotifyCommentOff = !comments
+			a.saveSettings()
+		}
+	})
+
+	ui.Column(c).Gap(10).Children(func() {
+		ui.Text(c, tr.T("Tangkap cepat")).FontSize(12).FontWeight(600).TextColor(p.Faint)
+
+		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+			ui.Text(c, tr.T("Shortcut global")).FontSize(13).TextColor(p.Muted).Width(130)
+			ui.TextInput(c.Key("cap-shortcut"), &a.set.CaptureShortcut).Width(200).Placeholder(tr.T("CmdOrCtrl+Shift+Space"))
+			if a.btn(c, tr.T("Terapkan"), nil, false, false) {
+				a.saveSettings()
+				a.registerCaptureShortcut()
+			}
+		})
+		if a.captureErr != "" {
+			ui.Text(c, tr.T("Shortcut global tidak tersedia: ")+a.captureErr).FontSize(12).TextColor(c.Theme().Danger)
+		}
+
+		_, inboxLabel, _, _ := a.captureTarget("inbox")
+		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+			ui.Text(c, tr.T("Database Inbox")).FontSize(13).TextColor(p.Muted).Width(130)
+			ib := ui.ButtonBase(c.Key("cap-inbox-pick")).Role(ui.RoleButton).Label(inboxLabel).
+				Padding(5, 10).Radius(7).Border(1, p.Line).Cursor(ui.CursorPointer)
+			ib.Children(func() {
+				ui.Text(c, inboxLabel).FontSize(13).TextColor(p.Text)
+			})
+			if ib.Clicked() {
+				a.settings.inboxPicker = !a.settings.inboxPicker
+			}
+			ui.Popover(c, ib, &a.settings.inboxPicker, func() {
+				ui.Column(c).Width(240).Padding(6).Gap(2).Children(func() {
+					for _, db := range a.captureInboxNodes() {
+						row := ui.Row(c.Key("ib-"+db.ID)).Padding(6, 8).Radius(6).Cursor(ui.CursorPointer)
+						if row.Hovered() {
+							row.Background(p.Hover)
+						}
+						row.Children(func() {
+							ui.Text(c, nonEmpty(db.Title, tr.T("Database tanpa judul"))).FontSize(13)
+						})
+						if row.Clicked() {
+							a.set.CaptureInboxID = db.ID
+							a.settings.inboxPicker = false
+							a.saveSettings()
+						}
+					}
+				})
+			})
+		})
+
+		_, pageLabel, _, _ := a.captureTarget("page")
+		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+			ui.Text(c, tr.T("Halaman tujuan")).FontSize(13).TextColor(p.Muted).Width(130)
+			pb := ui.ButtonBase(c.Key("cap-page-pick")).Role(ui.RoleButton).Label(pageLabel).
+				Padding(5, 10).Radius(7).Border(1, p.Line).Cursor(ui.CursorPointer)
+			pb.Children(func() {
+				ui.Text(c, pageLabel).FontSize(13).TextColor(p.Text)
+			})
+			if pb.Clicked() {
+				a.settings.parentPicker = !a.settings.parentPicker
+			}
+			ui.Popover(c, pb, &a.settings.parentPicker, func() {
+				ui.Scroll(c).MaxHeight(220).Children(func() {
+					ui.Column(c).Width(240).Padding(6).Gap(2).Children(func() {
+						for _, pg := range a.capturePageNodes() {
+							row := ui.Row(c.Key("pp-"+pg.ID)).Padding(6, 8).Radius(6).Cursor(ui.CursorPointer)
+							if row.Hovered() {
+								row.Background(p.Hover)
+							}
+							row.Children(func() {
+								ui.Text(c, nonEmpty(pg.Title, tr.T("Tanpa judul"))).FontSize(13)
+							})
+							if row.Clicked() {
+								a.set.CaptureParentID = pg.ID
+								a.settings.parentPicker = false
+								a.saveSettings()
+							}
+						}
+					})
+				})
+			})
+		})
 	})
 }
 

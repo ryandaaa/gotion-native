@@ -399,7 +399,7 @@ func (a *App) createRow(i int, t *tableView) {
 	var groupShow json.RawMessage
 	if t.adding.groupCol != "" && t.adding.groupVal != "" {
 		if col, ok := t.column(t.adding.groupCol); ok {
-			if send, show, err := notion.Value(col, "", false, []string{t.adding.groupVal}); err == nil {
+			if send, show, err := notion.Value(col, t.adding.groupVal, false, []string{t.adding.groupVal}); err == nil {
 				extra = map[string]any{col.Name: send}
 				groupCol, groupShow = col.Name, show
 			}

@@ -76,6 +76,13 @@ type panel struct {
 	// readOnly holds what each read-only paragraph holds (guardReadOnly).
 	readOnly map[string]string
 	warned   bool
+
+	// right pane outline & scroll tracking
+	scroll       ui.ScrollState
+	jumpPara     int
+	flashPara    int
+	flashAt      time.Time
+	lastEditedBy string
 }
 
 // App is the state of the window.
@@ -134,6 +141,8 @@ type App struct {
 	library libraryState
 	// today is the "Hari ini" task aggregator across databases.
 	today todayState
+	// allCal is the unified "Kalender" aggregator across databases.
+	allCal allCalendarState
 	// settings is the settings dialog.
 	settings settingsView
 	// themeOpen shows the theme picker.
@@ -144,6 +153,31 @@ type App struct {
 
 	// widths are the last widths of the panels, for pages opened into them.
 	widths [2]float32
+
+	// right pane state
+	rightPaneOpen bool
+	pageInfos     map[string]pageInfoEntry
+	rightPaneFits bool // the window has room for it beside the panels
+	userNames     map[string]string
+	usersAsked    bool
+
+	// tray and notifications
+	tray         *mygo.Tray
+	quitting     bool
+	notified     notifiedState
+	notifyFrom   time.Time // comments older than this never notify
+	notifyCancel context.CancelFunc
+	sendNotify   func(notification)
+	setBadge     func(string)
+
+	// quick capture
+	capture         captureState
+	captureWin      *mygo.Window
+	captureReg      string
+	captureErr      string
+	captureQueue    []captureItem
+	captureFlushing bool
+	netOff          func()
 }
 
 // New returns the app, signed in when a token is saved.
@@ -156,6 +190,9 @@ func New() *App {
 	}
 	a.loadCache()
 	a.loadTodayCache()
+	a.loadNotified()
+	a.notifyFrom = nowFunc()
+	a.loadCaptureQueue()
 	return a
 }
 
@@ -164,6 +201,37 @@ func (a *App) Attach(w *mygo.Window) {
 	a.win = w
 	mygo.App.SetLocale(tr.Lang())
 	a.applyGlass()
+	if w != nil {
+		w.OnClose(func(e *mygo.CloseEvent) {
+			if a.closeHides() {
+				e.PreventDefault()
+				w.Hide()
+			}
+		})
+		a.initTray()
+		a.sendNotify = func(n notification) {
+			go func() {
+				_ = mygo.NewNotification(mygo.NotificationOptions{
+					ID:    n.ID,
+					Title: n.Title,
+					Body:  n.Body,
+				}).Show()
+			}()
+		}
+		a.setBadge = func(label string) {
+			mygo.App.Dock.SetBadge(label)
+			if a.tray != nil {
+				a.tray.SetTitle(label)
+			}
+		}
+		a.updateTrayBadge()
+		a.registerCaptureShortcut()
+		a.netOff = mygo.Network.OnChanged(func(s mygo.NetworkStatus) {
+			if s.Online {
+				a.flushCaptureQueue()
+			}
+		})
+	}
 	if w != nil && wallpaper.Supported() && a.wall == nil {
 		a.wall = &wallState{}
 		go a.watchWall(a.wall)
@@ -174,6 +242,8 @@ func (a *App) Attach(w *mygo.Window) {
 	a.refresh()
 	a.startLive()
 	a.startTodayTimer()
+	a.startNotifyTimer()
+	a.flushCaptureQueue()
 	a.restoreTabs()
 }
 
@@ -189,7 +259,24 @@ func (a *App) flushPanel(p *panel) {
 
 // Close sends unsaved edits.
 func (a *App) Close() {
+	a.quitting = true
 	a.stopTodayTimer()
+	a.stopNotifyTimer()
+	if a.netOff != nil {
+		a.netOff()
+		a.netOff = nil
+	}
+	if a.win != nil {
+		mygo.GlobalShortcut.UnregisterAll()
+	}
+	if a.captureWin != nil {
+		a.captureWin.Close()
+		a.captureWin = nil
+	}
+	if a.tray != nil {
+		a.tray.Destroy()
+		a.tray = nil
+	}
 	for _, list := range a.tabs {
 		for _, p := range list {
 			a.flushPanel(p)
@@ -225,36 +312,54 @@ func (a *App) toast(msg string) {
 // --- settings ---
 
 type settings struct {
-	Theme        string          `json:"theme"` // "system", "light" or "dark"
-	SidebarWidth float32         `json:"sidebarWidth"`
-	SidebarOff   bool            `json:"sidebarOff"`
-	Open         map[string]bool `json:"open"`   // expanded pages
-	Closed       map[string]bool `json:"closed"` // collapsed groups
-	Last         string          `json:"last"`
-	Second       string          `json:"second"`
-	Tabs         [2][]string     `json:"tabs"`   // each panel's tabs
-	Active       [2]int          `json:"active"` // and which shows
-	SplitSize    float32         `json:"splitSize"`
-	FullWidth    bool            `json:"fullWidth"`
-	Toggles      map[string]bool `json:"toggles"` // toggle blocks shown open
-	Zoom         float32         `json:"zoom"`    // 1 is 100%
-	Wash         string          `json:"wash"`    // the color behind the cards
-	Trashed      []trashed       `json:"trashed"` // pages put in the trash from gotion
-	Glass        bool            `json:"glass"`   // the system's glass behind them
-	// Views is how each database shows: "table", "cards" or "board".
+	Theme          string          `json:"theme"` // "system", "light" or "dark"
+	SidebarWidth   float32         `json:"sidebarWidth"`
+	SidebarOff     bool            `json:"sidebarOff"`
+	RightPane      bool            `json:"rightPane"`
+	RightPaneWidth float32         `json:"rightPaneWidth"`
+	Open           map[string]bool `json:"open"`   // expanded pages
+	Closed         map[string]bool `json:"closed"` // collapsed groups
+	Last           string          `json:"last"`
+	Second         string          `json:"second"`
+	Tabs           [2][]string     `json:"tabs"`   // each panel's tabs
+	Active         [2]int          `json:"active"` // and which shows
+	SplitSize      float32         `json:"splitSize"`
+	FullWidth      bool            `json:"fullWidth"`
+	Toggles        map[string]bool `json:"toggles"` // toggle blocks shown open
+	Zoom           float32         `json:"zoom"`    // 1 is 100%
+	Wash           string          `json:"wash"`    // the color behind the cards
+	Trashed        []trashed       `json:"trashed"` // pages put in the trash from gotion
+	Glass          bool            `json:"glass"`   // the system's glass behind them
+	// Views is how each database shows: "table", "cards", "board" or "calendar".
 	Views map[string]string `json:"views"`
 	// BoardGroup is the status/select column each database groups its board by.
 	BoardGroup map[string]string `json:"boardGroup"`
+	// CalendarDate is the date column each database uses in calendar view.
+	CalendarDate map[string]string `json:"calendarDate"`
 	// TodayOff lists database IDs excluded from the "Hari ini" view.
 	TodayOff map[string]bool `json:"todayOff"`
+	// CalOff lists database IDs excluded from the unified "Kalender" view.
+	CalOff map[string]bool `json:"calOff"`
 	// TodayLastDB remembers the last database chosen in "+ Tugas baru".
 	TodayLastDB string `json:"todayLastDB"`
 	// Language is "id" or "en", or "" to follow the system's.
 	Language string `json:"language"`
+	// Tray, startup, and notification preferences.
+	StayInTray       bool   `json:"stayInTray"`
+	OpenAtLogin      bool   `json:"openAtLogin"`
+	NotifyMorningOff bool   `json:"notifyMorningOff"`
+	NotifyDueOff     bool   `json:"notifyDueOff"`
+	NotifyCommentOff bool   `json:"notifyCommentOff"`
+	MorningTime      string `json:"morningTime"`
+	// Quick capture preferences.
+	CaptureShortcut string `json:"captureShortcut"`
+	CaptureInboxID  string `json:"captureInboxID"`
+	CaptureParentID string `json:"captureParentID"`
+	CaptureMode     string `json:"captureMode"`
 }
 
 func loadSettings() settings {
-	s := settings{Theme: "system", SidebarWidth: 270}
+	s := settings{Theme: "system", SidebarWidth: 270, MorningTime: "08:00", CaptureShortcut: "CmdOrCtrl+Shift+Space"}
 	if b, err := os.ReadFile(filepath.Join(configDir(), "settings.json")); err == nil {
 		json.Unmarshal(b, &s)
 	}
@@ -273,14 +378,29 @@ func loadSettings() settings {
 	if s.BoardGroup == nil {
 		s.BoardGroup = map[string]string{}
 	}
+	if s.CalendarDate == nil {
+		s.CalendarDate = map[string]string{}
+	}
 	if s.TodayOff == nil {
 		s.TodayOff = map[string]bool{}
+	}
+	if s.CalOff == nil {
+		s.CalOff = map[string]bool{}
 	}
 	if s.SidebarWidth < 200 {
 		s.SidebarWidth = 270
 	}
+	if s.RightPaneWidth < 240 || s.RightPaneWidth > 460 {
+		s.RightPaneWidth = 300
+	}
 	if s.Zoom < zooms[0] || s.Zoom > zooms[len(zooms)-1] {
 		s.Zoom = 1
+	}
+	if _, _, ok := parseMorningTime(s.MorningTime); !ok {
+		s.MorningTime = "08:00"
+	}
+	if s.CaptureShortcut == "" {
+		s.CaptureShortcut = "CmdOrCtrl+Shift+Space"
 	}
 	return s
 }
@@ -985,4 +1105,10 @@ func (a *App) languagePicker(c *ui.Context) {
 		}
 		a.setLanguage(cur)
 	}
+}
+
+// closeHides tells whether closing the window should only hide it: when the
+// user asked to stay in the tray and there is a tray to come back from.
+func (a *App) closeHides() bool {
+	return a.set.StayInTray && a.tray != nil && !a.quitting
 }
