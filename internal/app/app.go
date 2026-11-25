@@ -132,6 +132,8 @@ type App struct {
 	imageOf func(id string) ui.ImageSource
 	// library is the Pustaka page's search and order.
 	library libraryState
+	// today is the "Hari ini" task aggregator across databases.
+	today todayState
 	// settings is the settings dialog.
 	settings settingsView
 	// themeOpen shows the theme picker.
@@ -153,6 +155,7 @@ func New() *App {
 		a.client = a.clientFor(parseCreds(raw))
 	}
 	a.loadCache()
+	a.loadTodayCache()
 	return a
 }
 
@@ -170,6 +173,7 @@ func (a *App) Attach(w *mygo.Window) {
 	}
 	a.refresh()
 	a.startLive()
+	a.startTodayTimer()
 	a.restoreTabs()
 }
 
@@ -185,6 +189,7 @@ func (a *App) flushPanel(p *panel) {
 
 // Close sends unsaved edits.
 func (a *App) Close() {
+	a.stopTodayTimer()
 	for _, list := range a.tabs {
 		for _, p := range list {
 			a.flushPanel(p)
@@ -240,6 +245,8 @@ type settings struct {
 	Views map[string]string `json:"views"`
 	// BoardGroup is the status/select column each database groups its board by.
 	BoardGroup map[string]string `json:"boardGroup"`
+	// TodayOff lists database IDs excluded from the "Hari ini" view.
+	TodayOff map[string]bool `json:"todayOff"`
 	// Language is "id" or "en", or "" to follow the system's.
 	Language string `json:"language"`
 }
@@ -263,6 +270,9 @@ func loadSettings() settings {
 	}
 	if s.BoardGroup == nil {
 		s.BoardGroup = map[string]string{}
+	}
+	if s.TodayOff == nil {
+		s.TodayOff = map[string]bool{}
 	}
 	if s.SidebarWidth < 200 {
 		s.SidebarWidth = 270
@@ -361,6 +371,7 @@ func (a *App) checkToken() {
 func (a *App) signOut() {
 	a.searched = false
 	a.stopLive()
+	a.stopTodayTimer()
 	for _, p := range a.panels {
 		if p != nil && p.session != nil {
 			p.session.Close()
@@ -407,6 +418,7 @@ func (a *App) refresh() {
 			a.searched = true
 			a.setPages(pages)
 			a.saveCache(pages)
+			a.loadToday()
 		})
 	}()
 }

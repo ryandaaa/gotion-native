@@ -283,9 +283,9 @@ func (a *App) breadcrumbs(c *ui.Context) {
 func (a *App) sidebar(c *ui.Context) {
 	p := a.pal()
 	ui.Column(c).Fill().Padding(4, 8, 10, 10).Gap(2).Children(func() {
-		for _, id := range []string{libraryID, trashID} {
+		for _, id := range []string{todayID, libraryID, trashID} {
 			n := a.special(id)
-			s := map[string]*ui.SVG{libraryID: iconLibrary, trashID: iconTrash}[id]
+			s := map[string]*ui.SVG{todayID: iconCalendar, libraryID: iconLibrary, trashID: iconTrash}[id]
 			current := a.panels[a.focus] != nil && a.panels[a.focus].id == id
 			r := ui.Row(c.Key("sp"+id)).AlignItems(ui.Center).Gap(10).Padding(7, 10).Radius(8).Cursor(ui.CursorPointer)
 			if current {
@@ -296,6 +296,11 @@ func (a *App) sidebar(c *ui.Context) {
 			r.Children(func() {
 				ui.Icon(c, s).Size(16, 16).TextColor(p.Muted)
 				ui.Text(c, n.Title).FontSize(14).Grow(1)
+				if id == todayID {
+					if cnt := a.todayActiveCount(); cnt > 0 {
+						ui.Text(c, itoa(cnt)).FontSize(12).TextColor(p.Faint)
+					}
+				}
 				if id == trashID && len(a.set.Trashed) > 0 {
 					ui.Text(c, itoa(len(a.set.Trashed))).FontSize(12).TextColor(p.Faint)
 				}
@@ -607,6 +612,8 @@ func (a *App) panelView(c *ui.Context, i int) {
 		switch {
 		case pn == nil || pn.id == "":
 			a.empty(c)
+		case a.kindOf(pn.id) == "today":
+			a.todayPanel(c, i)
 		case a.kindOf(pn.id) == "library":
 			a.libraryPanel(c, i)
 		case a.kindOf(pn.id) == "trash":
@@ -1034,10 +1041,10 @@ func (a *App) thinScrollbar() ui.ScrollbarStyle {
 }
 
 // hasPages tells that the workspace shows a page or a database, not
-// counting the library and the trash.
+// counting special app panels.
 func (a *App) hasPages() bool {
-	for id := range a.nodes {
-		if id != libraryID && id != trashID {
+	for _, n := range a.nodes {
+		if !isSpecial(n.Kind) {
 			return true
 		}
 	}

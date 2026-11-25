@@ -77,11 +77,13 @@ func (a *App) stopLive() {
 // pages made, moved or gone; a page open, fresh; its comments, again.
 func (a *App) onEvents(events []liveEvent) {
 	tree := false
+	today := false
 	for _, e := range events {
 		switch e.Type {
 		case "page.created", "page.deleted", "page.undeleted", "page.moved", "page.properties_updated",
 			"database.created", "database.deleted", "data_source.created", "data_source.deleted":
 			tree = true
+			today = true
 		}
 		for _, pn := range a.panels {
 			if pn == nil || pn.id == "" {
@@ -97,5 +99,7 @@ func (a *App) onEvents(events []liveEvent) {
 	}
 	if tree {
 		a.refresh()
+	} else if today {
+		a.loadToday()
 	}
 }

@@ -302,9 +302,11 @@ func TestEditDateWithCalendar(t *testing.T) {
 		t.Fatal(err)
 	}
 	tester.Advance(time.Second)
-	if err := tester.Click("Hari ini"); err != nil {
-		t.Fatal(err)
+	kos, ok := tester.Find("Kosongkan")
+	if !ok {
+		t.Fatal("Kosongkan button not found in date popover")
 	}
+	tester.ClickAt(kos.X-30, kos.Y+kos.H/2)
 	tester.Frame()
 	if got := notion.FormatProperty(tv.rows[0].Properties["Deadline"]); got != "24 November 2026" {
 		t.Errorf("today shown %q, want %q", got, "24 November 2026")

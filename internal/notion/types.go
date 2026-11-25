@@ -51,6 +51,38 @@ type User struct {
 			MaxFileUploadSize int64 `json:"max_file_upload_size_in_bytes"`
 		} `json:"workspace_limits"`
 	} `json:"bot,omitempty"`
+	ownerID string
+}
+
+func (u *User) UnmarshalJSON(b []byte) error {
+	type plain User
+	if err := json.Unmarshal(b, (*plain)(u)); err != nil {
+		return err
+	}
+	var raw struct {
+		Bot *struct {
+			Owner *struct {
+				User *struct {
+					ID string `json:"id"`
+				} `json:"user"`
+			} `json:"owner"`
+		} `json:"bot"`
+	}
+	if json.Unmarshal(b, &raw) == nil && raw.Bot != nil && raw.Bot.Owner != nil && raw.Bot.Owner.User != nil {
+		u.ownerID = raw.Bot.Owner.User.ID
+	}
+	return nil
+}
+
+// PersonID returns the authorizing user's ID when available (OAuth), else u.ID.
+func (u *User) PersonID() string {
+	if u == nil {
+		return ""
+	}
+	if u.ownerID != "" {
+		return u.ownerID
+	}
+	return u.ID
 }
 
 // Annotations style a piece of rich text.
@@ -363,12 +395,13 @@ func (c *Client) DeleteBlock(ctx context.Context, id string) error {
 // Property is a column of a data source. Options are the choices of a
 // select, status or multi-select.
 type Property struct {
-	ID      string        `json:"id"`
-	Name    string        `json:"name"`
-	Type    string        `json:"type"`
-	Options []Option      `json:"-"`
-	Groups  []StatusGroup `json:"-"`
-	ordered []Option      `json:"-"`
+	ID        string        `json:"id"`
+	Name      string        `json:"name"`
+	Type      string        `json:"type"`
+	Options   []Option      `json:"-"`
+	Groups    []StatusGroup `json:"-"`
+	ordered   []Option      `json:"-"`
+	optionIDs []string      `json:"-"`
 	// Target is the data source a relation's pages come from.
 	Target string `json:"-"`
 }
@@ -408,6 +441,7 @@ func (p *Property) UnmarshalJSON(b []byte) error {
 		for _, o := range choices.Options {
 			opt := Option{Name: o.Name, Color: o.Color}
 			p.Options = append(p.Options, opt)
+			p.optionIDs = append(p.optionIDs, o.ID)
 			if o.ID != "" {
 				byID[o.ID] = opt
 			}
@@ -470,6 +504,62 @@ func (p Property) OrderedOptions() []Option {
 		return p.ordered
 	}
 	return p.Options
+}
+
+// CompleteOptions returns the names of options in the "Complete" status group
+// (or matching common completion names when no groups are present).
+func (p Property) CompleteOptions() []string {
+	if p.Type != "status" {
+		return nil
+	}
+	var out []string
+	if len(p.Groups) > 0 {
+		completeIDs := map[string]bool{}
+		for _, g := range p.Groups {
+			if strings.EqualFold(g.Name, "complete") {
+				for _, id := range g.OptionIDs {
+					completeIDs[id] = true
+				}
+			}
+		}
+		for i, o := range p.Options {
+			if i < len(p.optionIDs) && completeIDs[p.optionIDs[i]] {
+				out = append(out, o.Name)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	for _, o := range p.Options {
+		switch strings.ToLower(o.Name) {
+		case "done", "complete", "completed", "selesai":
+			out = append(out, o.Name)
+		}
+	}
+	return out
+}
+
+// IsComplete reports whether raw holds a completed checkbox or status value.
+func (p Property) IsComplete(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	switch p.Type {
+	case "checkbox":
+		return FormatProperty(raw) == "☑"
+	case "status":
+		chips := Chips(raw)
+		if len(chips) == 0 {
+			return false
+		}
+		for _, name := range p.CompleteOptions() {
+			if chips[0].Name == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Editable reports whether a property's value can be set: not one Notion

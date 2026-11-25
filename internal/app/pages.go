@@ -18,6 +18,7 @@ import (
 
 // The app's own pages, which open in tabs as Notion's do.
 const (
+	todayID   = "gotion:today"
 	libraryID = "gotion:library"
 	trashID   = "gotion:trash"
 )
@@ -26,10 +27,11 @@ const (
 func (a *App) special(id string) *node {
 	if n := a.nodes[id]; n != nil {
 		// Its name follows the language.
-		n.Title = map[string]string{libraryID: tr.T("Pustaka"), trashID: tr.T("Sampah")}[id]
+		n.Title = map[string]string{todayID: tr.T("Hari ini"), libraryID: tr.T("Pustaka"), trashID: tr.T("Sampah")}[id]
 		return n
 	}
 	n := map[string]*node{
+		todayID:   {ID: todayID, Title: tr.T("Hari ini"), Kind: "today"},
 		libraryID: {ID: libraryID, Title: tr.T("Pustaka"), Kind: "library"},
 		trashID:   {ID: trashID, Title: tr.T("Sampah"), Kind: "trash"},
 	}[id]
@@ -42,7 +44,7 @@ func (a *App) special(id string) *node {
 	return n
 }
 
-func isSpecial(kind string) bool { return kind == "library" || kind == "trash" }
+func isSpecial(kind string) bool { return kind == "library" || kind == "trash" || kind == "today" }
 
 // trashed is a page put in Notion's trash from gotion. Notion's API lists
 // no trash, so gotion keeps its own.
