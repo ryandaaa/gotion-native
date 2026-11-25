@@ -441,7 +441,7 @@ func (a *App) cards(c *ui.Context, i int, t *tableView) {
 // returns its element so callers can attach drag/pose behavior.
 func (a *App) rowCard(c *ui.Context, i int, t *tableView, r *notion.Page, width float32) ui.Element {
 	p := a.pal()
-	card := ui.Column(c.Key("card"+r.ID)).Width(width).Gap(10).Padding(14, 16).Radius(10).
+	card := ui.Column(c.Key("card"+r.ID)).Width(width).Gap(8).Padding(14, 16).Radius(10).
 		Background(p.Panel).Cursor(ui.CursorPointer)
 	if card.Hovered() {
 		card.Border(1, p.EditLine).Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.12))
@@ -457,18 +457,29 @@ func (a *App) rowCard(c *ui.Context, i int, t *tableView, r *notion.Page, width 
 			ui.Text(c, nonEmpty(r.Title(), tr.T("Tanpa judul"))).FontSize(15).FontWeight(600).MaxLines(2).MinWidth(0)
 		})
 		shown := 0
-		for _, col := range t.columns {
-			raw := r.Properties[col.Name]
-			if col.Type == "title" || shown >= 4 || !hasValue(raw) {
-				continue
+		ui.Column(c).FillWidth().Gap(3).Children(func() {
+			for _, col := range t.columns {
+				raw := r.Properties[col.Name]
+				if col.Type == "title" || shown >= 4 || !hasValue(raw) {
+					continue
+				}
+				shown++
+				box := ui.Row(c.Key("v"+col.Name)).FillWidth().Padding(3, 6).Margin(0, -6).Radius(5).
+					MinHeight(24).Gap(8).AlignItems(ui.Center)
+				if a.editable(c, t, r, col, box, func() {
+					if col.Type == "checkbox" {
+						a.value(c, raw, col.Type)
+						ui.Text(c, col.Name).FontSize(12).TextColor(p.Muted).SingleLine().Grow(1).MinWidth(0)
+						return
+					}
+					ui.Text(c, col.Name).FontSize(12).TextColor(p.Faint).SingleLine().Shrink(0).MaxWidth(90)
+					ui.Box(c).Grow(1)
+					a.value(c, raw, col.Type)
+				}) {
+					own = true
+				}
 			}
-			shown++
-			ui.Text(c, col.Name).FontSize(11).TextColor(p.Faint).SingleLine()
-			box := ui.Row(c.Key("v"+col.Name)).Padding(2, 4).Margin(-2, -4, 0, -4).Radius(5).MinHeight(22).AlignItems(ui.Center)
-			if a.editable(c, t, r, col, box, func() { a.value(c, raw, col.Type) }) {
-				own = true
-			}
-		}
+		})
 		ui.Text(c, tr.T("Diubah ")+ago(r.LastEditedTime)).FontSize(11).TextColor(p.Faint)
 	})
 	if card.Clicked() && !own && !t.edit.open {
