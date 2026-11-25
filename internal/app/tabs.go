@@ -128,7 +128,7 @@ func (a *App) restoreTabs() {
 		a.panels[0] = &panel{}
 	}
 	if a.panels[1] != nil {
-		a.guessSplit()
+		a.guessSplit(false)
 	}
 }
 

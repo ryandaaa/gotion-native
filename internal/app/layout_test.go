@@ -105,7 +105,7 @@ func TestSplitSettlesAtOnce(t *testing.T) {
 		}
 	}
 	a.panels[1] = tablePanel(t, "two", "Dua")
-	a.guessSplit()
+	a.guessSplit(true)
 	settles("split")
 	a.closeSecond()
 	settles("split-closed")

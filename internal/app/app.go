@@ -101,6 +101,8 @@ type App struct {
 	checking   bool
 	tokenErr   string
 	tokenOpen  bool // the integration token's steps unfolded
+	// onbLastStep is the sign-in step shown last, for the way the next slides.
+	onbLastStep int
 
 	// sidebar
 	nodes     map[string]*node
@@ -841,21 +843,23 @@ func (a *App) showOrActivate(n *node, i int) {
 func (a *App) openBeside(n *node) {
 	if a.panels[1] == nil {
 		a.panels[1] = &panel{}
-		a.guessSplit()
+		a.guessSplit(true)
 	}
 	a.open(n, 1)
 }
 
-// guessSplit sets the widths a new split leaves, so its first frame is
-// close to right.
-func (a *App) guessSplit() {
+// guessSplit sets the widths a split leaves, so its first frame is right.
+// A split the user opens (half) goes 50:50, whatever the divider was dragged
+// to last; one restored at start keeps where it was.
+func (a *App) guessSplit(half bool) {
 	total := a.widths[0]
 	if total <= 0 {
 		return
 	}
 	first := a.set.SplitSize
-	if first < 300 || first > total-300 {
+	if half || first < 300 || first > total-300 {
 		first = total / 2
+		a.set.SplitSize = first
 	}
 	a.widths[0], a.widths[1] = first, total-first
 	if a.panels[0] != nil {
@@ -931,13 +935,21 @@ func (a *App) shape(p *panel) doc.Shape {
 	for k, v := range a.set.Toggles {
 		open[k] = v
 	}
+	// The pages' emoji, copied here: the build runs off the main thread,
+	// where a.nodes changes.
+	icons := map[string]string{}
+	for id, n := range a.nodes {
+		if n != nil && n.Emoji != "" {
+			icons[id] = n.Emoji
+		}
+	}
 	return doc.Shape{OpenToggles: open, Width: &p.textWidth, Emoji: func(e string) ui.ImageSource {
 		// Builds run in the background: fetching here is fine.
 		if s := emoji.Load(context.Background(), e); s != nil {
 			return s
 		}
 		return nil
-	}}
+	}, PageIcon: func(id string) string { return icons[id] }}
 }
 
 func (a *App) openPage(p *panel, id string) {

@@ -38,6 +38,8 @@ type Shape struct {
 	Width *float32
 	// Emoji returns an emoji's picture, nil to show the system's glyph.
 	Emoji func(string) ui.ImageSource
+	// PageIcon returns a sub-page's or database's emoji, "" for none.
+	PageIcon func(id string) string
 }
 
 // iconRun is an emoji drawn as a picture where the shape gives one, a
@@ -178,6 +180,20 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 	link := func(prefix, label string) []richtext.Run {
 		return []richtext.Run{{Text: label, Attributes: richtext.Attributes{Link: LinkPrefix + prefix + b.ID, Underline: true}}}
 	}
+	// A sub-page or database: its own emoji where it has one, its title
+	// semibold, no underline, as Notion lists them.
+	pageLink := func(prefix, kind, label string) []richtext.Run {
+		var head []richtext.Run
+		if shape.PageIcon != nil {
+			if e := shape.PageIcon(b.ID); e != "" {
+				head = iconRun(e, shape)
+			}
+		}
+		if head == nil {
+			head = []richtext.Run{glyph(kind)}
+		}
+		return append(head, richtext.Run{Text: label, Attributes: richtext.Attributes{Link: LinkPrefix + prefix + b.ID, Weight: 500}})
+	}
 	switch b.Type {
 	case "divider":
 		return richtext.Paragraph{Style: st, Runs: []richtext.Run{{Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{Attachment: divider()}}}}
@@ -186,7 +202,7 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 		if title == "" {
 			title = tr.T("Tanpa judul")
 		}
-		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("page")}, link("page/", title)...)}
+		return richtext.Paragraph{Style: st, Runs: pageLink("page/", "page", title)}
 	case "image":
 		if img := shape.Images[b.ID]; img != nil {
 			w, h := ui.ImageSize(img)
@@ -214,7 +230,7 @@ func readOnlyParagraph(b *notion.Block, depth int, shape Shape) richtext.Paragra
 		if title == "" || title == "-" {
 			title = tr.T("Database tanpa judul")
 		}
-		return richtext.Paragraph{Style: st, Runs: append([]richtext.Run{glyph("table")}, link("db/", title)...)}
+		return richtext.Paragraph{Style: st, Runs: pageLink("db/", "table", title)}
 	case "bookmark", "embed", "link_preview":
 		var bp struct {
 			URL     string            `json:"url"`

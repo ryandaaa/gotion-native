@@ -266,3 +266,22 @@ func TestSadCommentsWithoutRoomForPane(t *testing.T) {
 		t.Fatalf("pane %v drawer %v with room", a.set.RightPane, pn.comments.open)
 	}
 }
+
+// Opening a split halves the window, whatever the divider was dragged to
+// before; a split restored at start keeps its place.
+func TestSplitOpensHalf(t *testing.T) {
+	a := New()
+	a.panels[0] = &panel{id: "a"}
+	a.widths[0] = 1200
+	a.set.SplitSize = 900
+	a.openBeside(&node{ID: "b", Kind: "page", Title: "B"})
+	if a.set.SplitSize != 600 || a.widths[0] != 600 || a.widths[1] != 600 {
+		t.Fatalf("split %v widths %v, want 600/600", a.set.SplitSize, a.widths)
+	}
+	a.widths[0] = 1200
+	a.set.SplitSize = 800
+	a.guessSplit(false)
+	if a.set.SplitSize != 800 {
+		t.Fatalf("restored split moved to %v", a.set.SplitSize)
+	}
+}
