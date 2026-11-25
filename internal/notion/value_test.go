@@ -5,6 +5,7 @@ import (
 	"gotion/internal/tr"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValue(t *testing.T) {
@@ -95,5 +96,31 @@ func TestDateFormattingAndStart(t *testing.T) {
 		if got := FormatProperty(json.RawMessage(tc.raw)); got != tc.wantFmt {
 			t.Errorf("EN FormatProperty(%s) = %q, want %q", tc.raw, got, tc.wantFmt)
 		}
+	}
+}
+
+func TestDeferDate(t *testing.T) {
+	loc := time.FixedZone("WIB", 7*3600)
+	tomorrow := time.Date(2026, 11, 26, 0, 0, 0, 0, loc)
+	prop := Property{ID: "d", Name: "Tenggat", Type: "date"}
+
+	// 1. Date with time preserves hour and minute.
+	send, show, err := DeferDate(prop, json.RawMessage(`{"type":"date","date":{"start":"2026-11-24T09:30:00+07:00"}}`), tomorrow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(send)
+	if !strings.Contains(string(b), `"start":"2026-11-26T09:30:00+07:00"`) {
+		t.Errorf("time not preserved: %s (show=%s)", b, show)
+	}
+
+	// 2. Date range preserves duration (3 days).
+	send, _, err = DeferDate(prop, json.RawMessage(`{"type":"date","date":{"start":"2026-11-22","end":"2026-11-25"}}`), tomorrow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ = json.Marshal(send)
+	if string(b) != `{"date":{"end":"2026-11-29","start":"2026-11-26"}}` {
+		t.Errorf("range duration not preserved: %s", b)
 	}
 }

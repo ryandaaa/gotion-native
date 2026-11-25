@@ -247,6 +247,8 @@ type settings struct {
 	BoardGroup map[string]string `json:"boardGroup"`
 	// TodayOff lists database IDs excluded from the "Hari ini" view.
 	TodayOff map[string]bool `json:"todayOff"`
+	// TodayLastDB remembers the last database chosen in "+ Tugas baru".
+	TodayLastDB string `json:"todayLastDB"`
 	// Language is "id" or "en", or "" to follow the system's.
 	Language string `json:"language"`
 }

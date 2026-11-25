@@ -2,6 +2,7 @@ package app
 
 import (
 	"gotion/internal/tr"
+	"math"
 	"runtime"
 
 	"github.com/egoist/mygo"
@@ -159,4 +160,58 @@ func (a *App) swatch(c *ui.Context, w wash, selected bool) ui.Element {
 		dot.Border(1, p.Faint.Alpha(0.4))
 	}
 	return dot
+}
+
+// relativeLuminance returns WCAG's relative luminance of c (0..1).
+func relativeLuminance(c ui.Color) float64 {
+	ch := func(v uint8) float64 {
+		s := float64(v) / 255
+		if s <= 0.04045 {
+			return s / 12.92
+		}
+		return math.Pow((s+0.055)/1.055, 2.4)
+	}
+	return 0.2126*ch(c.R) + 0.7152*ch(c.G) + 0.0722*ch(c.B)
+}
+
+// contrastRatio returns WCAG's contrast ratio between two opaque colors (1..21).
+func contrastRatio(a, b ui.Color) float64 {
+	l1, l2 := relativeLuminance(a), relativeLuminance(b)
+	if l1 < l2 {
+		l1, l2 = l2, l1
+	}
+	return (l1 + 0.05) / (l2 + 0.05)
+}
+
+// tintColors returns the background tint and high-contrast text color (>= 5:1)
+// derived from accent for light or dark surfaces.
+func tintColors(accent ui.Color, isDark bool) (bg, fg ui.Color) {
+	if isDark {
+		bg = accent.Alpha(0.18)
+		surface := ui.Hex("#252527")
+		fg = ui.Color{R: accent.R, G: accent.G, B: accent.B, A: 255}
+		for step := 1; step <= 40 && contrastRatio(fg, surface) < 5.0; step++ {
+			t := float64(step) / 40
+			fg = ui.Color{
+				R: uint8(float64(accent.R)*(1-t) + 255*t),
+				G: uint8(float64(accent.G)*(1-t) + 255*t),
+				B: uint8(float64(accent.B)*(1-t) + 255*t),
+				A: 255,
+			}
+		}
+		return bg, fg
+	}
+	bg = accent.Alpha(0.13)
+	white := ui.Hex("#FFFFFF")
+	fg = ui.Color{R: accent.R, G: accent.G, B: accent.B, A: 255}
+	for step := 1; step <= 40 && contrastRatio(fg, white) < 5.0; step++ {
+		scale := 1.0 - float64(step)/40
+		fg = ui.Color{
+			R: uint8(float64(accent.R) * scale),
+			G: uint8(float64(accent.G) * scale),
+			B: uint8(float64(accent.B) * scale),
+			A: 255,
+		}
+	}
+	return bg, fg
 }

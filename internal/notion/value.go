@@ -83,6 +83,66 @@ func Value(p Property, text string, on bool, names []string) (send any, show jso
 	return send, show, err
 }
 
+// DeferDate moves a date property's start to targetDay (at midnight in
+// targetDay.Location()), preserving any time-of-day component and end-date
+// range duration.
+func DeferDate(p Property, raw json.RawMessage, targetDay time.Time) (send any, show json.RawMessage, err error) {
+	var v struct {
+		Date *struct {
+			Start string `json:"start"`
+			End   string `json:"end"`
+		} `json:"date"`
+	}
+	json.Unmarshal(raw, &v)
+
+	loc := targetDay.Location()
+	shift := func(orig string, newDay time.Time) string {
+		if len(orig) > 10 && orig[10] == 'T' {
+			if t, perr := time.Parse(time.RFC3339, orig); perr == nil {
+				localT := t.In(loc)
+				moved := time.Date(newDay.Year(), newDay.Month(), newDay.Day(),
+					localT.Hour(), localT.Minute(), localT.Second(), localT.Nanosecond(), loc)
+				return moved.Format(time.RFC3339)
+			}
+		}
+		return newDay.Format("2006-01-02")
+	}
+	parseDay := func(s string) (time.Time, bool) {
+		if len(s) > 10 && s[10] == 'T' {
+			if t, perr := time.Parse(time.RFC3339, s); perr == nil {
+				lt := t.In(loc)
+				return time.Date(lt.Year(), lt.Month(), lt.Day(), 0, 0, 0, 0, loc), true
+			}
+		}
+		if len(s) >= 10 {
+			if t, perr := time.ParseInLocation("2006-01-02", s[:10], loc); perr == nil {
+				return t, true
+			}
+		}
+		return time.Time{}, false
+	}
+
+	dateObj := map[string]any{}
+	if v.Date != nil && v.Date.Start != "" {
+		dateObj["start"] = shift(v.Date.Start, targetDay)
+		if v.Date.End != "" {
+			if sDay, ok1 := parseDay(v.Date.Start); ok1 {
+				if eDay, ok2 := parseDay(v.Date.End); ok2 {
+					dur := eDay.Sub(sDay)
+					endTarget := targetDay.Add(dur)
+					dateObj["end"] = shift(v.Date.End, endTarget)
+				}
+			}
+		}
+	} else {
+		dateObj["start"] = targetDay.Format("2006-01-02")
+	}
+
+	send = map[string]any{"date": dateObj}
+	show, err = json.Marshal(map[string]any{"type": "date", "id": p.ID, "date": dateObj})
+	return send, show, err
+}
+
 // Linked is a person or a page a people or relation property points at.
 type Linked struct {
 	ID, Name string
